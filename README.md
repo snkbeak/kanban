@@ -12,11 +12,11 @@ custom kanban board built using fastapi + mongo for backend and astro + typescri
 * bugfix
 * feature
 * refactor
-* etc...
+* etc... (custom text allowed)
 
 # status label:
 * green: healthy
-* yellow: ????
+* yellow: at-risk
 * red: blocked
 
 # difficulty estimate: (aka time estimate)
@@ -50,3 +50,4 @@ custom kanban board built using fastapi + mongo for backend and astro + typescri
 
 # CRUD:
 * create, read, update, delete all fields except for account details
+* only comment author can create/update/delete their own comments
