@@ -1,0 +1,16 @@
+[project]
+name = "auth-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pymongo>=4.13",
+    "pydantic-settings>=2.4",
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.8",
+]
+
+
+[tool.uv]
+package = false
