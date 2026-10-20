@@ -1,19 +1,155 @@
 ---
-import Favicons from '../components/Favicons.astro';
-import '../styles/global.css';
+import KanbanLayout from '../layouts/KanbanLayout.astro';
+
+const columns = [
+    { id: 'review', title: 'Review / brainstorm' },
+    { id: 'backlog', title: 'Backlog' },
+    { id: 'in-progress', title: 'In progress' },
+    { id: 'done', title: 'Done' },
+    { id: 'blocked', title: 'Blocked' },
+] as const;
+
+interface Ticket {
+    id: number;
+    column: typeof columns[number]['id'];
+    title: string;
+    description: string;
+    tag: string;
+    difficulty: 'Easy' | 'Medium' | 'Hard';
+    health: 'Healthy' | 'At risk' | 'Blocked';
+    assignees: string[];
+    creator: string;
+    created: string;
+    updated: string;
+    comments: { author: string; text: string; date: string }[];
+}
+
+// Static examples until the board API is connected.
+const tickets: Ticket[] = [
+    { id: 24, column: 'review', title: 'A home for the next good idea', description: 'Explore a quick way to capture ideas before they become fully scoped tickets.', tag: 'feature', difficulty: 'Medium', health: 'Healthy', assignees: ['Chris', 'Sean'], creator: 'Chris', created: '2026-10-15', updated: '2026-10-19', comments: [{ author: 'Sean', text: 'A title and a short note should be enough to start.', date: '2026-10-19' }] },
+    { id: 23, column: 'review', title: 'Agree on our ticket labels', description: 'Keep the defaults small, with room for custom tags when we need them.', tag: 'planning', difficulty: 'Easy', health: 'Healthy', assignees: [], creator: 'James', created: '2026-10-15', updated: '2026-10-18', comments: [] },
+    { id: 22, column: 'backlog', title: 'Add comments to cards', description: 'Keep the discussion next to the work. Show who said what and when.', tag: 'feature', difficulty: 'Medium', health: 'Healthy', assignees: ['Sean'], creator: 'Chris', created: '2026-10-14', updated: '2026-10-18', comments: [] },
+    { id: 21, column: 'backlog', title: 'Clean up shared styles', description: 'Pull repeated styles into a few reusable classes and keep page styles separate.', tag: 'refactor', difficulty: 'Easy', health: 'Healthy', assignees: ['Chris'], creator: 'Chris', created: '2026-10-14', updated: '2026-10-17', comments: [] },
+    { id: 20, column: 'backlog', title: 'Filter by tag and difficulty', description: 'Make it easier to find a small task or focus on a particular kind of work.', tag: 'feature', difficulty: 'Medium', health: 'Healthy', assignees: ['James'], creator: 'Sean', created: '2026-10-13', updated: '2026-10-17', comments: [] },
+    { id: 19, column: 'in-progress', title: 'Build the shared board', description: 'Five columns, clear cards, and just the details we need to keep things moving.', tag: 'feature', difficulty: 'Hard', health: 'Healthy', assignees: ['Chris', 'James'], creator: 'Chris', created: '2026-10-12', updated: '2026-10-19', comments: [{ author: 'James', text: 'The column order looks good. Let’s keep the card summaries compact.', date: '2026-10-18' }, { author: 'Chris', text: 'Agreed. Extra details can live inside each card.', date: '2026-10-19' }] },
+    { id: 18, column: 'in-progress', title: 'Handle long ticket titles', description: 'Check wrapping so longer titles stay readable without pushing metadata out of place.', tag: 'bugfix', difficulty: 'Easy', health: 'At risk', assignees: ['Sean'], creator: 'James', created: '2026-10-12', updated: '2026-10-19', comments: [] },
+    { id: 17, column: 'in-progress', title: 'Define the card data model', description: 'Settle the fields for tickets, assignees, timestamps, and comments.', tag: 'refactor', difficulty: 'Medium', health: 'Healthy', assignees: ['James'], creator: 'James', created: '2026-10-11', updated: '2026-10-18', comments: [] },
+    { id: 16, column: 'done', title: 'Set up the Astro project', description: 'The frontend foundation is ready for layouts, pages, and a shared color palette.', tag: 'feature', difficulty: 'Easy', health: 'Healthy', assignees: ['Chris'], creator: 'Chris', created: '2026-10-10', updated: '2026-10-16', comments: [] },
+    { id: 15, column: 'done', title: 'Write down the first-pass scope', description: 'One shared board for the three of us. Start simple and build from there.', tag: 'planning', difficulty: 'Easy', health: 'Healthy', assignees: ['Sean', 'James'], creator: 'Sean', created: '2026-10-10', updated: '2026-10-15', comments: [] },
+    { id: 14, column: 'blocked', title: 'Connect the database', description: 'Waiting on a shared development database before wiring up ticket persistence.', tag: 'feature', difficulty: 'Hard', health: 'Blocked', assignees: ['James'], creator: 'James', created: '2026-10-10', updated: '2026-10-19', comments: [{ author: 'James', text: 'Need the development connection details before picking this back up.', date: '2026-10-19' }] },
+];
+
+const formatDate = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 ---
 
-<html lang="en">
-    <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="description" content="index page" />
-        <Favicons />
-        <title>Index | kanban.sneakybeak.net</title>
-    </head>
-    <body>
-        <main id="main">
-            <h1>Hello Index!</h1>
-        </main>
-    </body>
-</html>
+<KanbanLayout title="Board">
+    <Fragment slot="navbar">
+        <p id="board-results" aria-live="polite">{tickets.length} tickets across {columns.length} columns</p>
+        <form class="board-toolbar" role="search">
+        <div class="board-filters">
+            <label class="search-field">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg>
+                <input id="ticket-search" type="search" aria-label="Search tickets" placeholder="Search tickets…" />
+            </label>
+            <select id="assignee-filter" aria-label="Filter by assignee">
+                <option value="">All assignees</option>
+                <option>Chris</option>
+                <option>Sean</option>
+                <option>James</option>
+                <option value="unassigned">Unassigned</option>
+            </select>
+            <button class="clear-filters" type="reset" hidden>Clear filters</button>
+        </div>
+        </form>
+    </Fragment>
+
+    <div class="kanban-board" aria-label="Kanban board">
+        {columns.map((column) => (
+            <section class="kanban-column" data-column={column.id} aria-labelledby={`heading-${column.id}`}>
+                <header class="column-header">
+                    <div class="column-title">
+                        <span class="column-dot" aria-hidden="true"></span>
+                        <h2 id={`heading-${column.id}`}>{column.title}</h2>
+                        <span class="column-count">{tickets.filter((ticket) => ticket.column === column.id).length}</span>
+                    </div>
+                </header>
+                <div class="column-cards">
+                    {tickets.filter((ticket) => ticket.column === column.id).map((ticket) => (
+                        <details class="ticket" data-search={`KAN-${ticket.id} ${ticket.title}`.toLowerCase()} data-assignees={ticket.assignees.join(',') || 'unassigned'}>
+                            <summary>
+                                <span class="ticket-topline">
+                                    <span class="ticket-id">KAN-{ticket.id}</span>
+                                    <span class="health" data-health={ticket.health}><span aria-hidden="true"></span>{ticket.health}</span>
+                                </span>
+                                <h3>{ticket.title}</h3>
+                                <span class="ticket-description">{ticket.description}</span>
+                                <span class="ticket-labels">
+                                    <span class="tag" data-tag={ticket.tag}>{ticket.tag}</span>
+                                    <span class="difficulty"><span class="difficulty-bars" data-difficulty={ticket.difficulty} aria-hidden="true"><i></i><i></i><i></i></span>{ticket.difficulty}</span>
+                                </span>
+                                <span class="ticket-footer">
+                                    <span class="assignees">
+                                        {ticket.assignees.length ? ticket.assignees.map((person) => <span class="avatar" data-person={person} title={person} aria-label={person}>{person[0]}</span>) : <span class="unassigned">Unassigned</span>}
+                                    </span>
+                                    <span class="ticket-activity">
+                                        <span class="comment-count" aria-label={`${ticket.comments.length} comments`}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 15a3 3 0 0 1-3 3H9l-5 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3Z" /></svg>
+                                            {ticket.comments.length}
+                                        </span>
+                                        <time datetime={ticket.updated} title={`Updated ${ticket.updated}`}>{formatDate(ticket.updated)}</time>
+                                    </span>
+                                </span>
+                            </summary>
+                            <div class="ticket-details">
+                                <p>{ticket.description}</p>
+                                <p class="ticket-credit">Created by {ticket.creator} · <time datetime={ticket.created}>{formatDate(ticket.created)}</time></p>
+                                <h4>Comments ({ticket.comments.length})</h4>
+                                {ticket.comments.length ? ticket.comments.map((comment) => (
+                                    <div class="ticket-comment">
+                                        <p><strong>{comment.author}</strong> <time datetime={comment.date}>{formatDate(comment.date)}</time></p>
+                                        <p>{comment.text}</p>
+                                    </div>
+                                )) : <p class="ticket-credit">No comments yet.</p>}
+                            </div>
+                        </details>
+                    ))}
+                    <p class="column-empty" hidden>No matching tickets.</p>
+                </div>
+            </section>
+        ))}
+    </div>
+</KanbanLayout>
+
+<script>
+    const toolbar = document.querySelector<HTMLFormElement>('.board-toolbar')!;
+    const search = document.querySelector<HTMLInputElement>('#ticket-search')!;
+    const assignee = document.querySelector<HTMLSelectElement>('#assignee-filter')!;
+    const clear = document.querySelector<HTMLButtonElement>('.clear-filters')!;
+
+    function filterTickets() {
+        const query = search.value.trim().toLowerCase();
+        let total = 0;
+        document.querySelectorAll<HTMLElement>('.kanban-column').forEach((column) => {
+            let count = 0;
+            column.querySelectorAll<HTMLDetailsElement>('.ticket').forEach((ticket) => {
+                ticket.hidden = !ticket.dataset.search!.includes(query)
+                    || Boolean(assignee.value && !ticket.dataset.assignees!.split(',').includes(assignee.value));
+                if (!ticket.hidden) count++;
+            });
+            column.querySelector('.column-count')!.textContent = String(count);
+            column.querySelector<HTMLElement>('.column-empty')!.hidden = count > 0;
+            total += count;
+        });
+        clear.hidden = !query && !assignee.value;
+        document.querySelector('#board-results')!.textContent = `${total} ${total === 1 ? 'ticket' : 'tickets'} across 5 columns`;
+    }
+
+    search.addEventListener('input', filterTickets);
+    assignee.addEventListener('change', filterTickets);
+    toolbar.addEventListener('submit', (event) => event.preventDefault());
+    toolbar.addEventListener('reset', () => {
+        search.value = '';
+        assignee.value = '';
+        filterTickets();
+    });
+</script>

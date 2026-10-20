@@ -1,0 +1,41 @@
+---
+import Favicons from '../components/Favicons.astro';
+import '../styles/global.css';
+import '../styles/kanban.css';
+
+interface Props {
+    title: string;
+    description?: string;
+}
+
+const { title, description = 'A shared board for Chris, Sean, and James.' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="description" content={description} />
+        <Favicons />
+        <title>{title} | kanban.sneakybeak.net</title>
+    </head>
+    <body class="kanban-shell">
+        <a class="skip-link" href="#main">Skip to board</a>
+        <header class="app-header">
+            <a class="wordmark" href="/" aria-label="Kanban home">
+                <span class="board-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+                kanban<span class="wordmark-dot">.</span>
+            </a>
+            <slot name="navbar" />
+            <div class="team" aria-label="Team: Chris, Sean, and James">
+                <span class="avatar" data-person="Chris" title="Chris">C</span>
+                <span class="avatar" data-person="Sean" title="Sean">S</span>
+                <span class="avatar" data-person="James" title="James">J</span>
+            </div>
+        </header>
+        <main id="main" class="kanban-page">
+            <slot />
+        </main>
+    </body>
+</html>
