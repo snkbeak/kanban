@@ -1,0 +1,40 @@
+---
+import LoginLayout from '../layouts/LoginLayout.astro';
+---
+<LoginLayout title="Login" description="Login to kanban.sneakybeak.net">
+    <section class="login-card" aria-labelledby="login-title">
+        <h1 id="login-title">Log in</h1>
+        <form class="login-form" method="post">
+            <div class="login-field">
+                <label for="username">Username</label>
+                <input
+                    id="username"
+                    name="username"
+                    type="text"
+                    autocomplete="username"
+                    autocapitalize="none"
+                    spellcheck="false"
+                    required
+                />
+            </div>
+            <div class="login-field">
+                <label for="password">Password</label>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                />
+            </div>
+            <button type="submit">Log in</button>
+        </form>
+    </section>
+</LoginLayout>
+
+<script>
+    // Keep credentials local until the authentication API is connected.
+    document.querySelector('.login-form')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+    });
+</script>
