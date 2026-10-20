@@ -1,43 +1,85 @@
-# Astro Starter Kit: Minimal
+# Kanban frontend
 
-```sh
-npm create astro@latest -- --template minimal
+Astro frontend configured for Cloudflare Workers Static Assets at
+`https://kanban.sneakybeak.net`, deployed with Wrangler. The Worker name is
+`kanban-sneakybeak-net`. Only the subdomain is configured; the root domain's
+existing site is separate.
+
+This configuration currently serves the static frontend scaffold. The FastAPI
+backend and `/api` proxy described in [the implementation plan](../.agent/05-cloudflare-deployment.md)
+will be added separately.
+
+## Local development
+
+Use Node.js 22.22.0 or newer. From the repository root:
+
+```powershell
+cd frontend
+npm ci
+npm run dev -- --background
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+Manage the Astro background server with `npm run astro -- dev status`,
+`npm run astro -- dev logs`, and `npm run astro -- dev stop`.
 
-## 🚀 Project Structure
+## Cloudflare login
 
-Inside of your Astro project, you'll see the following folders and files:
+Run these commands inside `frontend/`. First check your existing authentication:
 
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+```powershell
+npx wrangler whoami
 ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+Wrangler normally stores OAuth credentials in its global user configuration, so
+a login from another repository under the same Windows user can already work
+here. If `whoami` shows the correct account, skip login. If it says you are not
+authenticated, open the browser login flow with:
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+```powershell
+npx wrangler login
+npx wrangler whoami
+```
 
-Any static assets, like images, can be placed in the `public/` directory.
+Choose the Cloudflare account that owns the active `sneakybeak.net` zone. If you
+have multiple accounts, set the intended `account_id` in `wrangler.jsonc` before
+deployment. An explicitly configured API token or authentication profile may
+override the default browser login. See [Wrangler authentication commands](https://developers.cloudflare.com/workers/wrangler/commands/general/).
 
-## 🧞 Commands
+## Build and preview without publishing
 
-All commands are run from the root of the project, from a terminal:
+```powershell
+npm run build
+npm run preview
+```
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+To build and preview using Cloudflare's local runtime instead of Astro's preview
+server:
 
-## 👀 Want to learn more?
+```powershell
+npm run preview:cloudflare
+```
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Stop either foreground preview with Ctrl+C. Neither preview publishes the site.
+
+## Deploy when ready
+
+The following command builds Astro and then publishes to Cloudflare. Run it only
+when you intend to deploy:
+
+```powershell
+npm run deploy
+```
+
+Wrangler uses `wrangler.jsonc` to upload `dist/` and attach the custom domain
+`kanban.sneakybeak.net`. Cloudflare provisions the custom-domain DNS record and
+certificate during setup. The domain must belong to an active zone in the same
+account; resolve a conflicting record for that exact subdomain if Cloudflare
+reports one. See [Cloudflare Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+
+The configuration disables `workers.dev` and preview URLs, and matches your
+other project's trailing-slash and 404 handling. Static output does not require
+an Astro Cloudflare SSR adapter. See [Cloudflare's Astro guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/astro/).
+
+No deployment or DNS changes are performed by installing dependencies or editing
+these files. Keep local secrets in ignored `.dev.vars` files; never put them in
+`wrangler.jsonc` or browser-visible assets.

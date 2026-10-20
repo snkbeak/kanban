@@ -9,9 +9,14 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "preview:cloudflare": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
     "astro": "astro"
   },
   "dependencies": {
     "astro": "^7.4.1"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.2"
   }
 }
