@@ -75,8 +75,8 @@ const formatDate = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateS
                 </header>
                 <div class="column-cards">
                     {tickets.filter((ticket) => ticket.column === column.id).map((ticket) => (
-                        <details class="ticket" data-search={`KAN-${ticket.id} ${ticket.title}`.toLowerCase()} data-assignees={ticket.assignees.join(',') || 'unassigned'}>
-                            <summary>
+                        <details class="ticket" data-ticket-id={ticket.id} data-search={`KAN-${ticket.id} ${ticket.title}`.toLowerCase()} data-assignees={ticket.assignees.join(',') || 'unassigned'}>
+                            <summary draggable="true">
                                 <span class="ticket-topline">
                                     <span class="ticket-id">KAN-{ticket.id}</span>
                                     <span class="health" data-health={ticket.health}><span aria-hidden="true"></span>{ticket.health}</span>
@@ -137,7 +137,9 @@ const formatDate = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateS
                 if (!ticket.hidden) count++;
             });
             column.querySelector('.column-count')!.textContent = String(count);
-            column.querySelector<HTMLElement>('.column-empty')!.hidden = count > 0;
+            const empty = column.querySelector<HTMLElement>('.column-empty')!;
+            empty.hidden = count > 0;
+            empty.textContent = query || assignee.value ? 'No matching tickets.' : 'No tickets yet.';
             total += count;
         });
         clear.hidden = !query && !assignee.value;
@@ -152,4 +154,55 @@ const formatDate = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateS
         assignee.value = '';
         filterTickets();
     });
+
+    let draggedTicket: HTMLDetailsElement | null = null;
+
+    function clearDropTargets() {
+        document.querySelectorAll('.is-drop-target').forEach((column) => column.classList.remove('is-drop-target'));
+    }
+
+    function endDrag() {
+        draggedTicket?.classList.remove('is-dragging');
+        draggedTicket = null;
+        clearDropTargets();
+    }
+
+    document.querySelectorAll<HTMLDetailsElement>('.ticket').forEach((ticket) => {
+        ticket.querySelector('summary')!.addEventListener('dragstart', (event) => {
+            if (!event.dataTransfer) return;
+            draggedTicket = ticket;
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', ticket.dataset.ticketId!);
+            ticket.classList.add('is-dragging');
+        });
+    });
+
+    document.querySelectorAll<HTMLElement>('.kanban-column').forEach((column) => {
+        column.addEventListener('dragover', (event) => {
+            if (!draggedTicket || column.contains(draggedTicket)) return;
+            event.preventDefault();
+            if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+            clearDropTargets();
+            column.classList.add('is-drop-target');
+        });
+
+        column.addEventListener('dragleave', (event) => {
+            if (event.relatedTarget instanceof Node && column.contains(event.relatedTarget)) return;
+            column.classList.remove('is-drop-target');
+        });
+
+        column.addEventListener('drop', (event) => {
+            if (!draggedTicket) return;
+            event.preventDefault();
+            if (!column.contains(draggedTicket)) {
+                // Keep moves in the DOM for now; persistence can be added here later.
+                column.querySelector('.column-cards')!.insertBefore(draggedTicket, column.querySelector('.column-empty'));
+                filterTickets();
+            }
+            endDrag();
+        });
+    });
+
+    document.addEventListener('dragend', endDrag);
+    document.addEventListener('drop', endDrag);
 </script>
