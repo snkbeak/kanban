@@ -1,6 +1,8 @@
 # kanban
 custom kanban board built using fastapi + mongo for backend and astro + typescript for frontend
 
+Backend setup, CRUD contracts, and tests: [backend/README.md](backend/README.md). The API requires a MongoDB replica set (one local node is sufficient). The frontend still uses sample data; wiring it to the API is separate work.
+
 # sections:
 1. review/brainstorm: 
 2. backlog:

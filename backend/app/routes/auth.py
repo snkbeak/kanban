@@ -30,7 +30,7 @@ async def login(
     tokens=Depends(get_tokens),
     settings: Settings = Depends(get_settings),
 ):
-    user = await users.find_one({"username": body.username.strip().lower()})
+    user = await users.find_one({"_id": body.username})
     ok = await verify_password(user["password_hash"] if user else None, body.password)
     if not (user and ok):
         # Same message for unknown user and wrong password.

@@ -1,107 +1,96 @@
-# Cloudflare deployment plan
+# Deployment plan
 
-Hosting guidance checked against official documentation on October 19, 2026. This is an implementation plan; no services have been provisioned or deployed.
+Updated October 20, 2026 to match the finalized backend and existing frontend configuration. Follow [next-steps.md](next-steps.md) for remaining work and [backend/README.md](../backend/README.md) for executable API/setup details. This document plans deployment; editing it does not provision or publish services.
 
-## Recommended arrangement
+## Current state and target
 
-Cloudflare/Wrangler for the frontend is confirmed. Render and MongoDB Atlas are recommended starting points for the remaining services, pending provider/tier selection.
+- Cloudflare Workers Static Assets configuration already exists for `kanban.sneakybeak.net`, Worker name `kanban-sneakybeak-net`. The root domain's existing site is separate. `workers.dev` and preview URLs are disabled; preserve these settings.
+- The frontend scaffold is static. The `/api` proxy and production backend connection remain to be implemented.
+- FastAPI CRUD and authentication are implemented and tested. Atlas connectivity and transactions were verified using disposable test databases; application data/accounts were not provisioned.
+- Atlas is the available database service. Select the application database, permissions, production network access, and backup policy.
+- The Python host/tier remains unselected. Render is an option from the earlier plan, not a confirmed deployment. Keep a conventional Python process unless a separate hosting evaluation justifies another runtime.
 
-| Component | Proposed home | Responsibility |
-| --- | --- | --- |
-| Astro static output | Cloudflare Workers Static Assets | HTML, JavaScript, CSS, and profile images |
-| Small TypeScript Worker | Cloudflare Workers, deployed alongside assets | Forward `/api` requests to the Python backend |
-| FastAPI | One Render web service / one Uvicorn worker | Authentication, authorization, validation, board API |
-| MongoDB | MongoDB Atlas | Persistent users, sessions, cards, comments, and counters |
+Target request flow: browser -> Cloudflare static assets/API proxy -> FastAPI -> Atlas. MongoDB credentials belong only to the backend. The Worker forwards HTTP and contains no card or ordering business logic.
 
-```mermaid
-flowchart LR
-    Browser[Three users] --> CF[Cloudflare: Astro assets and API proxy]
-    CF -->|HTTPS /api| API[Render: FastAPI]
-    API -->|TLS database connection| DB[MongoDB Atlas]
+## 1. Backend environment and startup
+
+Use Python 3.12+ with the dependencies in `backend/pyproject.toml`. There is currently no project Dockerfile or committed backend lockfile; `uv.lock` is ignored. Before release, choose a reproducible build mechanism rather than assuming either artifact exists.
+
+For a conventional Python service, use `backend/` as the working directory, install uv in the build environment, and run `uv sync --no-dev`. The current application is a factory:
+
+```sh
+uv run --no-sync uvicorn app.main:create_app --factory --host 0.0.0.0 --port "$PORT" --workers 1
 ```
 
-This is a recommendation based on the existing Python/MongoDB design: a conventional Python host lets us use the driver and password-hashing dependencies without adapting them to a different runtime. Render documents a standard [FastAPI deployment](https://render.com/docs/deploy-fastapi). Cloudflare documents [static Astro deployment using Wrangler](https://developers.cloudflare.com/workers/framework-guides/web-apps/astro/).
+This is a POSIX hosting command; the service supplies `PORT`. For local PowerShell use the backend README's command. Render supports ordinary Python/FastAPI services; adapt its setup to this project's factory rather than copying a `main:app` example unchanged. [Render FastAPI documentation](https://render.com/docs/deploy-fastapi).
 
-The browser talks only to the Cloudflare hostname. Atlas is reached by FastAPI, never by browser JavaScript or the proxy Worker. A backend redeployment does not replace database storage.
+| Current setting | Deployment use |
+| --- | --- |
+| `MONGO_URL` or `MONGODB_URI` | Complete Atlas connection URI; `MONGO_URL` wins if both are set |
+| `MONGO_DB` | Explicit application database name; do not rely on the default `kanban` |
+| `JWT_SECRET` | Random secret of at least 32 characters, stable across restarts |
+| `COOKIE_SECURE` | `true` for the HTTPS frontend |
+| `TOKEN_DAYS` | Optional, defaults to 7 |
 
-## Frontend and Wrangler
+Separate MongoDB username/password settings are unnecessary when the URI contains credentials. Do not expose configuration in frontend build variables, generated assets, logs, or committed files.
 
-Keep Astro in static-output mode; the proposed board does not need SSR. Use a separate Worker source file such as `frontend/worker/index.ts` for proxying. Cloudflare's Astro guide explains that static Astro output does not require the SSR adapter. Commit `frontend/wrangler.jsonc` with:
+Startup checks transaction-capable topology and legacy account shape, creates indexes, and initializes counters/column revisions idempotently. It closes the client on shutdown. Probe `/api/health/ready` for database readiness and `/api/health/live` for process liveness; runtime database failures yield generic 503 responses.
 
-- A project name and explicitly pinned compatibility date.
-- `main` pointing to the proxy Worker source.
-- `assets.directory` pointing to `./dist`, with an `ASSETS` binding.
-- `assets.run_worker_first` covering `/api` and `/api/*`, so API paths always reach the proxy.
-- A non-secret `API_ORIGIN` variable containing the backend's HTTPS origin.
+Provision `chris`, `sean`, and `james` once with `uv run python -m app.create_user <username>`. Repeating this command resets the password and revokes tokens; never run it automatically on every deploy. The API has no signup or account editing endpoint.
 
-All other paths serve Astro assets. Return API errors as API responses, never the frontend HTML fallback. Cloudflare supports selective Worker-first routing in its [asset routing configuration](https://developers.cloudflare.com/workers/static-assets/routing/worker-script/).
+Fresh databases need no migration. If old disposable development records exist, stop the app and identify the exact database before the documented reset. Never perform a deployment-wide cluster reset.
 
-Once implemented, the frontend workflow from `frontend/` is:
+## 2. Cloudflare assets and API proxy
 
-```powershell
-npm ci
-npm run build
-npx wrangler dev
-# After local checks, when deploying:
-npx wrangler deploy
-```
+Extend the existing `frontend/wrangler.jsonc` and scripts. Preserve its custom domain, static HTML handling, 404 behavior, Worker name, and disabled alternate URLs.
 
-Install Wrangler as a locked development dependency. Define the build script to produce Astro's `dist/`. Configure the project explicitly before deploying, so automatic framework detection does not replace the intended static-assets-plus-proxy setup. Initial deployment can use a `workers.dev` hostname; a custom domain can follow. Set the actual frontend HTTPS origin in backend configuration.
+Add a Worker entry point such as `frontend/worker/index.ts`, `main`, an `ASSETS` binding, and a configured backend `API_ORIGIN`. Route `/api` and `/api/*` through the Worker first; serve other requests through the assets binding. Cloudflare supports this selective routing via `assets.run_worker_first`. [Worker/static-asset routing documentation](https://developers.cloudflare.com/workers/static-assets/routing/worker-script/).
 
-## Proxy behavior and login cookies
+Proxy requirements:
 
-Implement a narrowly scoped proxy to the configured origin, preserving the `/api` prefix and query string. Do not accept an arbitrary destination supplied by the browser.
+- Use only the configured backend origin; preserve the `/api` path, query string, method, request body, cookie, content type, and relevant browser headers.
+- Preserve upstream status, JSON response bodies, and all Set-Cookie headers. Handle 204 responses without trying to parse JSON. API failures must not fall through to the static HTML page.
+- Preserve the host-only HttpOnly, SameSite=Lax cookie with Path=/; production responses use Secure. Do not set a backend-domain cookie.
+- Disable caching for every API response, including authentication and errors.
+- Bound upstream request time and report gateway failures clearly. Account for the backend's transaction deadline; on an uncertain write, let the client refresh instead of automatically retrying it.
+- Do not follow upstream redirects with credentials or accept client-supplied upstream destinations.
+- Keep preview environments separate or their API disabled. Do not reuse production accounts/secrets for arbitrary previews.
 
-- Forward method, body, session cookie, original browser Origin, and CSRF header. Preserve response status and all Set-Cookie headers.
-- Use host-only Secure/HttpOnly cookies with Path=/; do not set a Domain pointing at the backend provider. The browser receives the cookie from the Cloudflare response.
-- Add a shared `PROXY_SECRET` header, replacing any client-supplied value. Validate it in FastAPI before trusting proxy-provided identity/network headers. Store it as a Worker secret and backend secret, never a frontend build variable.
-- Replace forwarded client-IP metadata with the address Cloudflare supplies; do not trust user-provided forwarding headers. FastAPI should only use this metadata after proxy authentication, so login throttling distinguishes users correctly.
-- Reject direct-origin application requests lacking the proxy secret, including auth routes. Exempt only generic health probes. Sessions and CSRF remain mandatory through the proxy.
-- Disable caching for all `/api` responses, including errors and authentication responses. Avoid custom cache rules that override this.
-- Use a bounded upstream timeout and return a clear gateway error on failure. Do not automatically retry mutations. Do not automatically follow upstream redirects with sensitive headers; API routes should use canonical paths and return JSON.
+Validate locally before publishing using existing `npm run build` and `npm run preview:cloudflare` commands from `frontend/`. Once deployment is explicitly requested, `npm run deploy` builds and publishes the assets/proxy.
 
-Test the complete login/logout flow through Wrangler and the deployed hostname. Keep preview deployments on a separate backend/database or leave their API disabled; production sessions and credentials must not be shared with arbitrary preview origins.
+## 3. Backend-origin access and deferred authentication
 
-## FastAPI on Render
+A Worker-to-backend shared secret and rejection of direct-origin application traffic were earlier deployment proposals. Neither a `PROXY_SECRET` setting nor header validation currently exists in FastAPI. Decide the origin-access mechanism during deployment and implement/test both ends before claiming direct-origin protection. A proxy secret authenticates the proxy, not the signed-in user.
 
-1. Create one web service from the repository with `backend/` as its root, using either a Python build with the committed lockfile or the project's Dockerfile.
-2. Start the app with `uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1`. `$PORT` here is the hosting environment variable, not a local PowerShell instruction.
-3. Supply `MONGODB_URI`, database name, frontend allowed origin, `PROXY_SECRET`, and initial account credentials through backend secrets. Configure generic health endpoints.
-4. Run the idempotent index/account setup in the backend environment before enabling user traffic. Verify that redeploying cannot reset account passwords.
-5. Copy the HTTPS service origin into the Worker's `API_ORIGIN` and deploy the frontend/proxy.
+Do not trust forwarded client-IP headers until the proxy path authenticates and replaces them. This matters when the separate throttling implementation selects its client keys.
 
-The host's [FastAPI guide](https://render.com/docs/deploy-fastapi) covers its build/start configuration. Choose the service tier after reviewing current costs and idle/sleep behavior; this plan does not assume free, always-on hosting. Keep one instance initially because the proposed login limiter is process-local. Revisit throttling before scaling replicas.
+Login throttling and origin/CSRF protection remain in [07-auth-follow-up.md](07-auth-follow-up.md). The current backend has no allowed-origin setting or CSRF token/header contract; adding environment variables alone cannot enable them. Coordinate proxy/header handling with that follow-up when defined. These pending controls do not change the completed CRUD verification results.
 
-## MongoDB Atlas
+## 4. Atlas and persistence
 
-1. Create an Atlas project and a small cluster appropriate for the data and backup requirements. Place it near the backend region where possible.
-2. Create a database user restricted to the application database and obtain the TLS connection URI. Put the URI only in backend secrets.
-3. Add the backend service's published outbound IP ranges to Atlas's IP access list. Add an operator's IP temporarily when needed for setup; do not default to allowing all IPs.
-4. Verify startup, index creation, a card write/read, and persistence across backend restarts.
-5. Configure and test backup restoration before relying on the board for real work.
+Use the existing Atlas service; verify the chosen application database and tier rather than creating another cluster by default. Provide the backend with appropriate database permissions and permit its outbound network access. Keep test credentials/access separate where practical; integration tests need permission to create/drop generated test databases, which is not an application runtime requirement.
 
-Render exposes outbound ranges in the service dashboard's Connect / Outbound tab; Atlas uses an IP access list to control database connectivity. See [Render outbound IPs](https://render.com/docs/outbound-ip-addresses) and [Atlas network access](https://www.mongodb.com/docs/atlas/security/ip-access-list/).
+Transactions are mandatory: a local alternative must be a replica set, even if it has only one node. Standalone MongoDB is unsupported. Card/order writes commit together; do not replace this with process-local locks or independent writes.
 
-Verify backup scheduling, retention, and restore availability for the chosen Atlas tier. If it cannot meet the plan's retention policy, schedule encrypted `mongodump` backups from a trusted runner and test `mongorestore`; pause application writes during a logical backup. Do not equate a managed database with a verified recovery plan. See [Atlas backup and restore](https://www.mongodb.com/docs/atlas/backup-restore-cluster/).
+Persist and restore all application collections together: `users`, `tokens`, `cards`, `counters`, and `column_orders`. Username is the account primary key; there is no generated account ID to migrate. Cards embed comments and carry independent content/discussion versions. Ticket counters and ordering revisions are application data, not disposable caches.
 
-## Options for also hosting FastAPI on Cloudflare
+Test readiness, a create/read/move/comment cycle, and ordering persistence across backend restart/redeploy. Separate application verification from the previously completed disposable integration tests.
 
-Cloudflare can host FastAPI; the choice needs a little more validation for this project's dependencies.
+## 5. Backups, recovery, and release checks
 
-| Option | What changes | Assessment for this project |
-| --- | --- | --- |
-| Python Workers | Package the app for Cloudflare's Python runtime and ASGI integration; validate MongoDB connectivity, Argon2id dependencies, lifecycle behavior, and distributed login throttling | Consider only after a small deployed compatibility test; FastAPI support alone does not prove the complete dependency stack works |
-| Cloudflare Containers | Package standard Python/Uvicorn in a container and add a Worker/Container controller; validate startup, outbound networking, Atlas allowlisting, secrets, and current service costs | An alternative if keeping application compute on Cloudflare is a priority; retains a normal Python runtime but adds container lifecycle configuration |
-| Render web service | Run the planned Python app behind the Cloudflare proxy | Recommended starting point for this three-user project |
+Select and document backup frequency, retention, and recovery expectations for the actual Atlas tier. The earlier target of daily backups with seven daily and four weekly retention remains a planning target, not a provisioned guarantee. Check available mechanisms; if using logical dumps, quiesce application writes so cards, counters, and column orders form a consistent backup. Atlas backup availability and restore behavior depend on the cluster type/tier. [Atlas backup and restore documentation](https://www.mongodb.com/docs/atlas/backup-restore-cluster/).
 
-Cloudflare documents [FastAPI on Python Workers](https://developers.cloudflare.com/workers/languages/python/packages/fastapi/) and the runtime's [Python package compatibility](https://developers.cloudflare.com/workers/languages/python/packages/). Container deployment is documented separately in [Cloudflare Containers](https://developers.cloudflare.com/containers/).
+Restore into an isolated database and verify username identities, cards/comments, positions, revisions, and subsequent ticket allocation. A backup can restore old token records; rotate the JWT secret or revoke restored tokens before exposing a recovered environment. Document possible data loss since the backup and the supported rollback procedure.
 
-For either Cloudflare backend option, keep MongoDB on Atlas. Cloudflare Container disks are ephemeral by default, so simply putting `mongod` in a container does not provide the required durable database. See [Container lifecycle and storage](https://developers.cloudflare.com/containers/concepts/architecture/). Using a different Cloudflare database would require revising the MongoDB requirement and data implementation; it is outside the current plan.
+Release checks:
 
-## Deployment completion checks
+- All three provisioned accounts can log in, restore a session, and log out through the public Cloudflare hostname.
+- The full board loads without server filters/pagination; card/comment CRUD, selector moves, and drag-and-drop ordering persist.
+- Stale content/comment/order preconditions still return 409 through the proxy; comment activity does not invalidate a current content save.
+- Comment ownership, the 20-comment cap, Blocked health rules, and guarded whole-card deletion behave consistently in the browser.
+- Cookies and JSON/status responses survive the proxy; API responses are not cached.
+- Backend-origin access controls are tested once implemented, and authentication-follow-up status is reported separately.
+- Application data survives redeployment; an isolated restore succeeds.
+- CI runs backend and browser checks with isolated data; credentials stay out of assets and logs.
 
-- Wrangler deploys assets and proxy together; all five board columns load from the production API.
-- Login, session restoration, logout, CSRF protection, and author-only comment editing/deletion work through Cloudflare.
-- Two users attempting the same card update still receive correct conflict behavior through the proxy.
-- API responses are never cached, direct backend access is rejected, and credentials are absent from generated assets and logs.
-- Restarting/redeploying the backend preserves data, and a backup restores successfully into an isolated database.
+Hosting references were checked October 20, 2026. Provider pricing, tier selection, and provisioning remain separate decisions.

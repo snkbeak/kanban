@@ -48,7 +48,9 @@ async def verify_password(password_hash: str | None, password: str) -> bool:
 
     def _check() -> bool:
         try:
-            return hasher.verify(password_hash or DUMMY_HASH, password) and password_hash is not None
+            return (
+                hasher.verify(password_hash or DUMMY_HASH, password) and password_hash is not None
+            )
         except (VerificationError, InvalidHashError):
             return False
 
@@ -59,7 +61,7 @@ async def verify_password(password_hash: str | None, password: str) -> bool:
 # ---------- tokens ----------
 
 
-async def create_token(tokens, user_id: str, settings: Settings) -> str:
+async def create_token(tokens, username: str, settings: Settings) -> str:
     """Signs a JWT and records its ID in MongoDB. The token only works while that record exists.
 
     Only the ID (`jti`) is stored, not the JWT itself, so a database leak exposes no usable tokens.
@@ -67,8 +69,8 @@ async def create_token(tokens, user_id: str, settings: Settings) -> str:
     now = datetime.now(UTC)
     expires_at = now + timedelta(days=settings.token_days)
     jti = secrets.token_urlsafe(16)
-    await tokens.insert_one({"jti": jti, "user_id": user_id, "expires_at": expires_at})
-    claims = {"sub": user_id, "jti": jti, "iat": now, "exp": expires_at}
+    await tokens.insert_one({"jti": jti, "username": username, "expires_at": expires_at})
+    claims = {"sub": username, "jti": jti, "iat": now, "exp": expires_at}
     return jwt.encode(claims, settings.jwt_secret, algorithm=ALGORITHM)
 
 
@@ -99,7 +101,17 @@ async def current_user(
     if claims is None:
         raise unauthorized
     # A valid signature isn't enough: the token must still exist in MongoDB.
-    if await tokens.find_one({"jti": claims["jti"]}, {"_id": 1}) is None:
+    if (
+        await tokens.find_one(
+            {
+                "jti": claims["jti"],
+                "username": claims["sub"],
+                "expires_at": {"$gt": datetime.now(UTC)},
+            },
+            {"_id": 1},
+        )
+        is None
+    ):
         raise unauthorized
     user = await users.find_one({"_id": claims["sub"]})
     if user is None:

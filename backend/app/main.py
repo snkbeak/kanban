@@ -5,8 +5,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from pymongo import AsyncMongoClient
 
+from app.cards_store import initialize_database
 from app.config import Settings
+from app.errors import register_errors
 from app.routes.auth import router as auth_router
+from app.routes.cards import router as cards_router
+from app.routes.comments import router as comments_router
+from app.routes.health import router as health_router
+from app.routes.users import router as users_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -14,19 +20,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        client = AsyncMongoClient(settings.mongo_url, serverSelectionTimeoutMS=5000)
-        db = client[settings.mongo_db]
-        app.state.db = db
-        await db.users.create_index("username", unique=True)
-        await db.tokens.create_index("jti", unique=True)
-        # MongoDB deletes each token record once the token would have expired anyway.
-        await db.tokens.create_index("expires_at", expireAfterSeconds=0)
-        yield
-        await client.close()
+        client = AsyncMongoClient(
+            settings.mongo_url, serverSelectionTimeoutMS=5000, timeoutMS=15000, tz_aware=True
+        )
+        try:
+            app.state.db = client[settings.mongo_db]
+            await initialize_database(app.state.db)
+            yield
+        finally:
+            await client.close()
 
-    app = FastAPI(title="Auth API", lifespan=lifespan)
+    app = FastAPI(title="Kanban API", lifespan=lifespan)
     app.state.settings = settings
 
-    # Register new routers here, e.g. app.include_router(cards_router)
-    app.include_router(auth_router)
+    register_errors(app)
+    for router in (auth_router, cards_router, comments_router, users_router, health_router):
+        app.include_router(router)
     return app
