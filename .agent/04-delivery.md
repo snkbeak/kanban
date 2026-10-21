@@ -12,9 +12,9 @@ The Atlas tests created and removed only generated test databases. Application a
 
 | Milestone | Work | Acceptance |
 | --- | --- | --- |
-| Application setup | Set secret/database, provision intended accounts, verify readiness/login | App runs against the deliberately selected application database |
-| Frontend integration | Connect existing Astro interfaces to auth/users/full-board/card/comment/move routes | Browser workflow persists through reloads |
-| Collaboration | Independent content/discussion/order merging, polling, drafts, conflict and network recovery | Multiple sessions collaborate without silently losing changes |
+| Application setup | Local secret/database configured; three local accounts created once with user authorization; readiness/login verified | Local `kanban_dev` runs; production accounts remain operator-managed |
+| Frontend integration | 9 API/state tests, 12 fixture journeys, type checks/build, and two live local journeys pass | Local FastAPI/MongoDB browser workflow and reload/order persistence verified; Atlas application acceptance pending |
+| Collaboration | Independent revisions, polling, drafts, conflicts, uncertain writes, and session/network recovery verified with live local sessions | Repeat against the production path before release |
 | Deployment | Python service, Cloudflare API proxy, Atlas access, cookies, origin-access decisions | Public hostname uses the complete backend and persists across redeploys |
 | Release/operations | Browser coverage, CI, usability, backups, isolated restore, runbook | Multi-user browser flow and recovery are demonstrated |
 

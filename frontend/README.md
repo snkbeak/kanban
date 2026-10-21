@@ -5,9 +5,11 @@ Astro frontend configured for Cloudflare Workers Static Assets at
 `kanban-sneakybeak-net`. Only the subdomain is configured; the root domain's
 existing site is separate.
 
-This configuration currently serves the static frontend scaffold. The FastAPI
-backend and `/api` proxy described in [the implementation plan](../.agent/05-cloudflare-deployment.md)
-will be added separately.
+The board uses the FastAPI contract for cookie authentication, users, cards,
+comments, and manual ordering. Astro still emits static assets; browser code
+loads the complete board and applies search/filter/counts locally. The production
+Cloudflare `/api` proxy and backend hosting remain pending in
+[the deployment plan](../.agent/05-cloudflare-deployment.md).
 
 ## Local development
 
@@ -21,6 +23,126 @@ npm run dev -- --background
 
 Manage the Astro background server with `npm run astro -- dev status`,
 `npm run astro -- dev logs`, and `npm run astro -- dev stop`.
+
+Start FastAPI separately using [backend setup](../backend/README.md). Development
+requests to `/api` proxy to `http://127.0.0.1:8000` with the same path and cookies.
+To select another development backend, set `$env:API_ORIGIN = 'http://127.0.0.1:8001'`
+before starting Astro. This is a server-side process variable, not a browser URL
+or a MongoDB setting. Use `COOKIE_SECURE=false` for local HTTP. No frontend command
+creates accounts or changes application secrets.
+
+The Astro 7.4 Windows development runner required explicit pre-bundling of
+`picomatch`, `yaml`, and `p-queue` to load the server correctly. The targeted
+configuration follows [Astro's dependency optimizer reference](https://github.com/withastro/astro/blob/main/reference/optimize-deps.md).
+Recheck this workaround when upgrading Astro/Vite. After changing this setting,
+stop/start the dev server if its old failed route manifest remains cached.
+
+## Board behavior
+
+The existing card/column design is retained. Expand a ticket for its column
+selector or open **Edit / discuss**. Create requires a title and one tag; accounts
+and initials use canonical usernames. Selectors append to another column;
+drag-and-drop chooses a position, including within the same column. Dragging is
+disabled when filters hide any cards. Entering Blocked locks health to Blocked;
+leaving retains that health until a deliberate content edit.
+
+The board refreshes every 15 seconds while visible and on focus, with one refresh
+in flight. Local writes are serialized. Content, discussion, and order revisions
+are tracked independently. Refreshes retain open content/comment drafts and their
+original preconditions. A stale draft offers the latest saved values and explicit
+load/reapply actions; reapplying still requires Save. Moves do not silently rebase
+an open content draft. Individual comment controls belong to their author;
+whole-card deletion confirms removal of everyone's comments and guards both revisions.
+
+Drafts live only in this tab's memory, including closed editors and same-account
+session recovery. They are not persisted across a browser reload, navigation,
+explicit logout, or login as another account. JWTs and passwords are never stored
+in browser storage. After an uncertain write, editing stays blocked until a
+successful refresh; inspect the result before explicitly authorizing another
+write. Creates/comments are never automatically retried.
+
+Login throttling and origin/CSRF protection are still separate work in
+[07-auth-follow-up.md](../.agent/07-auth-follow-up.md). No new token/header contract
+is assumed by this client.
+
+## Focused checks
+
+From `frontend/`:
+
+```powershell
+npm run check
+npm test
+npm run build
+npx playwright install chromium
+npm run dev -- --background --host 127.0.0.1 --port 4321
+npm run test:browser -- --workers=2
+npm run astro -- dev stop
+```
+
+The browser suite intercepts `/api` with isolated HTTP fixtures. It tests the real
+page scripts, request payloads, reloads, conflict/recovery interactions, and mobile
+dialog/focus behavior without reading secrets, provisioning users, or accessing
+Atlas. It supplements the backend's contract/Atlas tests; it does not establish a
+live FastAPI/Atlas browser session or production cookie/proxy behavior. Complete
+those checks after deliberately selecting and provisioning the application database.
+
+## Live FastAPI/Atlas acceptance
+
+The separate `npm run test:live` command uses real HTTP requests through the local
+Astro proxy at `http://127.0.0.1:4321`. It does not start services or seed/reset
+accounts. First set an explicit `MONGO_DB` and a valid random `JWT_SECRET` in the
+backend environment, start FastAPI and Astro, and verify readiness. Preserve any
+existing secret unless deliberately rotating it. Repeating `app.create_user`
+resets that user's password and revokes sessions; provision accounts manually only
+when intended. The October 20 setup blockers were resolved by the user's environment
+update and explicitly authorized one-time local account creation. No account seed
+was added to application startup. Keep production provisioning manual.
+
+Provide credentials for **two different existing accounts** using process
+environment variables or a local, gitignored `frontend/.env.live` file:
+
+```dotenv
+KANBAN_LIVE=1
+KANBAN_LIVE_USER_A=chris
+KANBAN_LIVE_PASSWORD_A=<existing password, supplied locally>
+KANBAN_LIVE_USER_B=sean
+KANBAN_LIVE_PASSWORD_B=<existing password, supplied locally>
+```
+
+Replace the password placeholders locally; do not paste secrets into chat, commit
+the file, or copy backend secrets into it. The deliberately created local accounts
+use A=chris, B=sean, and C=james in this ignored file; the browser suite uses A/B.
+Then, from `frontend/`, run:
+
+```powershell
+npm run test:live
+```
+
+Missing opt-in/credentials or failed readiness is a failing prerequisite, not a
+skipped/passing acceptance result. The runner uses one worker, no retries, and no
+saved traces, screenshots, or video. Keep diagnostic logging disabled when using
+real credentials. No deployment or remote URL is selected by this command.
+
+The two journeys create three uniquely tagged acceptance tickets and use independent
+browser contexts to exercise login/cookies, content and ordering conflicts,
+retained content/comment drafts, offline and revoked-session recovery, independent
+discussion updates, Blocked/selector moves, drag ordering, and reload persistence.
+They also cover comment ownership and stale edits, the 20-comment cap and slot
+reuse, guarded whole-card deletion, and a committed comment whose HTTP response is
+lost without automatically replaying the write.
+Conflict timing is controlled by forwarding a paused request after a second real
+session writes; responses come from FastAPI, never HTTP fixtures. Cleanup deletes
+only those known run-owned tickets with both version guards and logs out only the
+test sessions. Ticket numbers and ordering revisions advance normally; they are
+never restored/reset. If interrupted or cleanup fails, inspect the reported run
+marker/card IDs before manually removing leftover acceptance tickets.
+
+Both live journeys passed on October 20, 2026 against local `kanban_dev`, alongside
+all three account login/me/logout checks. Their three tickets were removed; the
+accounts remain and the ticket counter is 3. This does **not** establish Atlas or
+production acceptance: the selected development `MONGO_URL` is loopback, and the
+production `MONGODB_URI` was not contacted. Production/restart persistence and
+remaining release checks are tracked in [next steps](../.agent/next-steps.md).
 
 ## Cloudflare login
 
@@ -60,6 +182,9 @@ npm run preview:cloudflare
 ```
 
 Stop either foreground preview with Ctrl+C. Neither preview publishes the site.
+
+These static previews do not provide the development API proxy. Use `npm run dev`
+for a working local API connection until the production Worker proxy is implemented.
 
 ## Deploy when ready
 

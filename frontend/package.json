@@ -8,6 +8,10 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "check": "astro check",
+    "test": "node --experimental-strip-types --test tests/state.test.ts tests/api.test.ts",
+    "test:browser": "playwright test",
+    "test:live": "node --env-file-if-exists=.env.live ./node_modules/@playwright/test/cli.js test --config=playwright.live.config.ts",
     "preview": "astro preview",
     "preview:cloudflare": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
@@ -17,6 +21,10 @@
     "astro": "^7.4.1"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.11",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5",
+    "typescript": "^6.0.3",
     "wrangler": "^4.151.2"
   }
 }

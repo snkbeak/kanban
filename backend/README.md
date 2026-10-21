@@ -205,10 +205,12 @@ Verification on October 20, 2026: **78 contract tests passed; all 13 real Atlas 
 
 Before running the application with an Atlas-only `.env`, add a random `JWT_SECRET`, explicitly select `MONGO_DB` (for example `kanban_dev`), and create the intended accounts. Test fixtures use their own secrets and accounts and do not provision the application database.
 
+Local application verification on October 20: the user configured a loopback development `MONGO_URL`, explicit `MONGO_DB=kanban_dev`, a valid JWT secret, and `COOKIE_SECURE=false`. With explicit user authorization, a one-off insert created the three previously absent local accounts; no startup seed or password reset was added. All three login/me/logout checks and two real browser journeys through Astro's proxy passed, covering conflicts, recovery, card/comment CRUD, and reload/order persistence. Only their three acceptance tickets were removed, leaving the accounts and normal counter/order advances. The production `MONGODB_URI` was not contacted. Atlas application provisioning remains manual and outside this local verification.
+
 ## Frontend handoff and remaining scope
 
-The static frontend is unchanged. Map `review` to “Review / Brainstorm”, `in_progress` to “In Progress”, `at_risk` to “At risk”, and tickets to `KAN-{number}`. Key account references, pictures, and initials by canonical username.
+The frontend now connects these routes while preserving the existing Astro design; see [frontend setup and checks](../frontend/README.md). Local provisioning and live FastAPI/MongoDB browser acceptance pass; Atlas/production application acceptance remains pending. Map `review` to “Review / Brainstorm”, `in_progress` to “In Progress”, `at_risk` to “At risk”, and tickets to `KAN-{number}`. Key account references, pictures, and initials by canonical username.
 
 The column selector appends to another column and disables its current option. Drag-and-drop is the only UI control for within-column ordering and supplies the drop anchor. Disable reordering while filters hide cards; allow selector moves. Keep the complete board for local search/filter/count/display-pagination behavior.
 
-Login throttling and origin/CSRF protection remain outside this delivery, tracked in [the authentication follow-up](../.agent/07-auth-follow-up.md). Frontend wiring and hosting changes are separate work.
+Login throttling and origin/CSRF protection remain outside this delivery, tracked in [the authentication follow-up](../.agent/07-auth-follow-up.md). Frontend wiring is implemented and covered by isolated browser fixtures; hosting and live application verification remain separate work.

@@ -5,7 +5,7 @@ Updated October 20, 2026 to match the finalized backend and existing frontend co
 ## Current state and target
 
 - Cloudflare Workers Static Assets configuration already exists for `kanban.sneakybeak.net`, Worker name `kanban-sneakybeak-net`. The root domain's existing site is separate. `workers.dev` and preview URLs are disabled; preserve these settings.
-- The frontend scaffold is static. The `/api` proxy and production backend connection remain to be implemented.
+- The API-connected frontend is built as static assets. A same-origin development proxy is implemented; the Cloudflare `/api` proxy and production backend connection remain to be implemented.
 - FastAPI CRUD and authentication are implemented and tested. Atlas connectivity and transactions were verified using disposable test databases; application data/accounts were not provisioned.
 - Atlas is the available database service. Select the application database, permissions, production network access, and backup policy.
 - The Python host/tier remains unselected. Render is an option from the earlier plan, not a confirmed deployment. Keep a conventional Python process unless a separate hosting evaluation justifies another runtime.

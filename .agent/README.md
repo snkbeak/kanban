@@ -1,6 +1,6 @@
 # Implementation plans
 
-Source: [project rough draft](../README.md). Backend CRUD and authentication are implemented and tested; the frontend remains a static scaffold awaiting API integration. The target audience is exactly three users: Chris, Sean, and James.
+Source: [project rough draft](../README.md). Backend CRUD/authentication and frontend API integration are implemented. Isolated browser fixtures and two real multi-session browser journeys against local `kanban_dev` pass; the three local accounts were deliberately provisioned with user authorization. Atlas application acceptance and deployment remain pending. The target audience is exactly three users: Chris, Sean, and James.
 
 Start here: [Next steps](next-steps.md) records the completed baseline and the remaining setup, frontend integration, collaboration, deployment, and release checks. Frontend, delivery, and deployment plans were reconciled with the implemented backend on October 20, 2026.
 

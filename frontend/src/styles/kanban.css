@@ -1,9 +1,9 @@
 .kanban-shell {
-  min-width: 1200px;
+  min-width: 320px;
   font-size: 0.875rem;
 }
 
-.kanban-shell :is(a, button, input, select, summary):focus-visible {
+.kanban-shell :is(a, button, input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--color-blue-80);
   outline-offset: 4px;
 }
@@ -29,8 +29,9 @@
 }
 
 .app-header {
-  height: 76px;
-  padding: 0 2rem;
+  min-height: 76px;
+  flex-wrap: wrap;
+  padding: 1rem 2rem;
   gap: 1.5rem;
   border-bottom: 1px solid var(--color-gray-20);
 }
@@ -64,9 +65,9 @@
   font-weight: 650;
 }
 
-.avatar[data-person="Chris"] { color: var(--color-blue-80); background: var(--color-blue-10); }
-.avatar[data-person="Sean"] { color: var(--color-purple-80); background: var(--color-purple-10); }
-.avatar[data-person="James"] { color: var(--color-orange-80); background: var(--color-orange-10); }
+.avatar[data-person="chris"] { color: var(--color-blue-80); background: var(--color-blue-10); }
+.avatar[data-person="sean"] { color: var(--color-purple-80); background: var(--color-purple-10); }
+.avatar[data-person="james"] { color: var(--color-orange-80); background: var(--color-orange-10); }
 .team .avatar { width: 32px; height: 32px; font-size: 0.75rem; }
 .kanban-page { padding: 1.5rem 2rem 1rem; }
 
@@ -75,7 +76,7 @@
 }
 
 .column-count { padding: 0.05rem 0.4rem; border-radius: 4px; background: var(--color-gray-20); color: var(--color-gray-60); font-size: 0.7rem; font-weight: 500; }
-.board-filters { gap: 0.6rem; }
+.board-filters { gap: 0.6rem; flex-wrap: wrap; }
 .search-field { gap: 0.5rem; padding: 0 0.7rem; color: var(--color-gray-60); }
 .search-field, .board-filters select { height: 34px; border: 1px solid var(--color-gray-20); border-radius: 5px; background: var(--color-gray-10); }
 .search-field input { width: 190px; border: 0; background: transparent; color: var(--color-gray-90); font: inherit; font-size: 0.75rem; }
@@ -83,10 +84,11 @@
 .board-filters select { padding: 0 0.6rem; color: var(--color-gray-60); font: inherit; font-size: 0.75rem; }
 .clear-filters { border: 0; background: transparent; color: var(--color-blue-80); font: inherit; font-size: 0.75rem; cursor: pointer; }
 
-.kanban-board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.kanban-scroll { overflow-x: auto; padding: 0.3rem; }
+.kanban-board { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 1rem; align-items: start; }
 .kanban-column { min-width: 0; --column-color: var(--color-gray-60); }
 .kanban-column[data-column="review"] { --column-color: var(--color-purple-80); }
-.kanban-column[data-column="in-progress"] { --column-color: var(--color-blue-80); }
+.kanban-column[data-column="in_progress"] { --column-color: var(--color-blue-80); }
 .kanban-column[data-column="done"] { --column-color: var(--color-green-80); }
 .kanban-column[data-column="blocked"] { --column-color: var(--color-red-80); }
 .column-header { padding: 0 0.25rem 1rem; }
@@ -137,3 +139,58 @@
 .ticket-comment time { margin-left: 0.25rem; font-size: 0.65rem; }
 .column-empty { padding: 1.5rem 0.5rem; color: var(--color-gray-60); font-size: 0.75rem; text-align: center; }
 .kanban-shell [hidden] { display: none; }
+
+.kanban-shell button, .ticket-details select, dialog select, dialog input, dialog textarea {
+  border: 1px solid var(--color-gray-40); border-radius: 5px; background: var(--color-gray-10);
+  color: var(--color-gray-90); padding: 0.4rem 0.6rem; font: inherit;
+}
+.kanban-shell button { cursor: pointer; }
+.kanban-shell button:hover { border-color: var(--color-blue-80); }
+.kanban-shell :disabled { opacity: 0.55; cursor: not-allowed; }
+.board-actions, .editor-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.board-actions #current-user { margin-left: auto; }
+#board-status, #editor-status, #session-status { color: var(--color-blue-80); }
+#board-status { flex: 1; min-width: 180px; }
+#new-card, #save-content { background: var(--color-blue-10); border-color: var(--color-blue-50); }
+.ticket-details button { margin: 0.8rem 0; }
+.ticket-details label { display: grid; gap: 0.3rem; }
+.ticket-details select { width: 100%; }
+.plain-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.drop-before { border-top: 3px solid var(--color-blue-80); }
+summary[draggable="false"] { cursor: pointer; }
+dialog {
+  width: min(720px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); margin: auto;
+  padding: 1.5rem; border: 1px solid var(--color-gray-40); border-radius: 10px;
+  background: var(--color-gray-05); color: var(--color-gray-90); overflow-y: auto;
+}
+dialog::backdrop { background: var(--color-black-alpha-75); }
+.dialog-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+dialog h2 { font-size: 1.2rem; }
+dialog h3 { font-size: 1rem; }
+dialog form { margin-block: 1rem; }
+dialog fieldset { border: 0; min-width: 0; }
+dialog label { display: grid; gap: 0.3rem; margin-bottom: 0.8rem; }
+dialog input, dialog textarea, dialog select { width: 100%; min-width: 0; }
+dialog textarea { resize: vertical; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }
+.assignee-options { margin-bottom: 1rem; }
+#editor-assignees { display: flex; gap: 1rem; flex-wrap: wrap; }
+#editor-assignees label { display: flex; align-items: center; margin: 0; }
+#editor-assignees input { width: auto; }
+.kanban-shell .danger { color: var(--color-red-80); }
+.editor-actions { border-block: 1px solid var(--color-gray-20); padding-block: 1rem; }
+.editor-actions label { margin: 0; }
+.editor-actions .danger { margin-left: auto; }
+#content-conflict { margin-top: 1rem; padding: 1rem; border: 1px solid var(--color-yellow-80); border-radius: 5px; }
+#latest-content { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow-y: auto; margin-block: 0.75rem; font: inherit; }
+#comments .ticket-comment { border-bottom: 1px solid var(--color-gray-20); padding-block: 0.7rem; }
+#comments button { margin: 0.5rem 0.3rem 0 0; }
+#session-dialog { width: min(440px, calc(100vw - 2rem)); }
+@media (max-width: 700px) {
+  .app-header { padding: 1rem; gap: 0.75rem; }
+  .board-toolbar { order: 3; width: 100%; }
+  .team { margin-left: auto; }
+  .kanban-page { padding: 1rem 0.5rem; }
+  .form-grid { grid-template-columns: 1fr; }
+  dialog { padding: 1rem; }
+}

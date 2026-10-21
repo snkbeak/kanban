@@ -21,9 +21,16 @@ pnpm-debug.log*
 # environment variables
 .env
 .env.production
+.env.live
 
 # macOS-specific files
 .DS_Store
 
 # jetbrains setting folder
 .idea/
+
+# The root Python ignore includes lib/; browser source is intentional.
+!src/lib/
+!src/lib/**
+test-results/
+playwright-report/

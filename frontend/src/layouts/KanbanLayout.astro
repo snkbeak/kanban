@@ -28,11 +28,7 @@ const { title, description = 'A shared board for Chris, Sean, and James.' } = As
                 kanban<span class="wordmark-dot">.</span>
             </a>
             <slot name="navbar" />
-            <div class="team" aria-label="Team: Chris, Sean, and James">
-                <span class="avatar" data-person="Chris" title="Chris">C</span>
-                <span class="avatar" data-person="Sean" title="Sean">S</span>
-                <span class="avatar" data-person="James" title="James">J</span>
-            </div>
+            <div class="team" aria-label="Team"></div>
         </header>
         <main id="main" class="kanban-page">
             <slot />

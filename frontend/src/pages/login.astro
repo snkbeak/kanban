@@ -4,7 +4,7 @@ import LoginLayout from '../layouts/LoginLayout.astro';
 <LoginLayout title="Login" description="Login to kanban.sneakybeak.net">
     <section class="login-card" aria-labelledby="login-title">
         <h1 id="login-title">Log in</h1>
-        <form class="login-form" method="post">
+        <form class="login-form" method="post" action="/api/auth/login">
             <div class="login-field">
                 <label for="username">Username</label>
                 <input
@@ -27,14 +27,36 @@ import LoginLayout from '../layouts/LoginLayout.astro';
                     required
                 />
             </div>
+            <p id="login-status" role="status"></p>
             <button type="submit">Log in</button>
         </form>
     </section>
 </LoginLayout>
 
 <script>
-    // Keep credentials local until the authentication API is connected.
-    document.querySelector('.login-form')?.addEventListener('submit', (event) => {
+    import { api, ApiError } from '../lib/api';
+    const form = document.querySelector<HTMLFormElement>('.login-form')!;
+    const status = document.querySelector<HTMLElement>('#login-status')!;
+    const submit = form.querySelector<HTMLButtonElement>('button')!;
+    let submitting = false;
+    form.addEventListener('submit', async (event) => {
         event.preventDefault();
+        if (submitting) return;
+        submitting = true;
+        submit.disabled = true;
+        status.textContent = 'Logging in…';
+        const data = new FormData(form);
+        try {
+            await api.login(String(data.get('username')), String(data.get('password')));
+            location.replace('/');
+        } catch (error) {
+            status.textContent = error instanceof ApiError && error.status === 401
+                ? 'Unable to log in. Check your username and password.'
+                : 'Unable to log in. Check your connection and try again.';
+        } finally {
+            submitting = false;
+            submit.disabled = false;
+        }
     });
+    void api.me().then(() => { if (!submitting) location.replace('/'); }).catch(() => {});
 </script>

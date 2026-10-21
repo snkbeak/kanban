@@ -4,7 +4,9 @@ Updated October 20, 2026 to match the implemented backend. [06-backend-crud.md](
 
 ## Starting point and structure
 
-Astro and TypeScript already provide a static board, login form, styles, and browser-only movement. Replace sample data and connect these interfaces to the API while preserving the existing visual design. A React island was an earlier proposal, not a requirement; choose the smallest maintainable approach compatible with the existing frontend.
+Implemented October 20, 2026 using Astro page shells and browser TypeScript, preserving the existing board/card styles. Sample data has been replaced with the API client in `frontend/src/lib/api.ts`; independent revision merging is in `board-state.ts`, and browser interactions/drafts are in `frontend/src/scripts/board.ts`. No React island or state framework was added. Login and editor dialogs connect the current API contract. See [next-steps.md](next-steps.md) for verified checks and remaining live-backend acceptance.
+
+Follow-up verification: two real browser journeys pass against local FastAPI and the `kanban_dev` replica set, including multi-session conflicts, retained drafts, uncertain-response recovery, comment ownership/cap, guarded deletion, and reload/order persistence. No application behavior or design changes were needed. This local verification does not establish Atlas/production acceptance.
 
 Use a typed API client and separate state for fetched records, ordering, and unsaved drafts. Derive or validate types against FastAPI OpenAPI. A global state framework is not required for three users.
 
