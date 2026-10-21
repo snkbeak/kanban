@@ -1,6 +1,6 @@
 """Create a user, or reset their password if they already exist.
 
-    python -m app.create_user chris "Chris"
+    python -m app.create_user chris
 """
 
 import asyncio
@@ -14,7 +14,7 @@ from app.auth import hasher
 from app.config import Settings
 
 
-async def main(username: str, display_name: str) -> None:
+async def main(username: str) -> None:
     password = getpass.getpass(f"Password for {username}: ")
     if len(password) < 8:
         sys.exit("password must be at least 8 characters")
@@ -31,7 +31,6 @@ async def main(username: str, display_name: str) -> None:
                 "$setOnInsert": {
                     "_id": uuid.uuid4().hex,
                     "username": username.lower(),
-                    "display_name": display_name,
                 },
             },
             upsert=True,
@@ -49,6 +48,6 @@ async def main(username: str, display_name: str) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        sys.exit('usage: python -m app.create_user <username> ["Display Name"]')
+        sys.exit('usage: python -m app.create_user <username>')
     name = sys.argv[1]
-    asyncio.run(main(name, sys.argv[2] if len(sys.argv) > 2 else name.title()))
+    asyncio.run(main(name))
