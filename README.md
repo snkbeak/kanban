@@ -3,6 +3,8 @@ custom kanban board built using fastapi + mongo for backend and astro + typescri
 
 Backend setup, CRUD contracts, and tests: [backend/README.md](backend/README.md). The API requires a MongoDB replica set (one local node is sufficient). The frontend connects authentication, card/comment CRUD, and manual ordering through same-origin `/api`; see [frontend setup and checks](frontend/README.md). Local `kanban_dev` accounts and two live browser journeys are verified. Atlas application acceptance and the production API proxy/deployment remain pending in [next steps](.agent/next-steps.md).
 
+Login throttling is implemented with configurable MongoDB limits and frontend retry guidance; see [the policy](backend/README.md#login-throttling). Origin/CSRF protection and authenticated production proxy/backend-origin access remain pending.
+
 # sections:
 1. review/brainstorm: 
 2. backlog:

@@ -31,6 +31,7 @@ async def initialize_database(db):
     await db.tokens.create_index("jti", unique=True)
     await db.tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.tokens.create_index("username")
+    await db.login_limits.create_index("expires_at", expireAfterSeconds=0)
     await db.cards.create_index("ticket_number", unique=True)
     await db.cards.create_index([("column", 1), ("position", 1), ("_id", 1)])
     await db.counters.update_one({"_id": "tickets"}, {"$setOnInsert": {"value": 0}}, upsert=True)

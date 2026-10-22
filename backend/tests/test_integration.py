@@ -8,6 +8,7 @@ import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import httpx
@@ -15,6 +16,7 @@ import jwt
 import pytest
 import pytest_asyncio
 from dotenv import dotenv_values
+from pymongo import AsyncMongoClient
 from pymongo.errors import DuplicateKeyError
 
 from app.auth import ALGORITHM, COOKIE, create_token, hasher
@@ -23,6 +25,7 @@ from app.config import Settings
 from app.create_user import set_password
 from app.errors import APIError
 from app.main import create_app
+from app.ratelimit import LoginLimiter
 
 TEST_URL = os.getenv("MONGO_TEST_URL") or dotenv_values(
     Path(__file__).resolve().parents[1] / ".env"
@@ -76,6 +79,156 @@ async def create(client, **fields):
     response = await client.post("/api/cards", json={"title": "Card", "tag": "feature", **fields})
     assert response.status_code == 201, response.text
     return response.json()
+
+
+@pytest.fixture
+def login_clock(monkeypatch):
+    # Future dates prevent the real TTL monitor from deleting controlled fixtures.
+    clock = [datetime(2040, 1, 1, tzinfo=UTC)]
+    monkeypatch.setattr(LoginLimiter, "_now", lambda self: clock[0])
+    return clock
+
+
+@pytest.mark.parametrize("username", ["james", "nobody"])
+async def test_login_normalization_isolation_and_cooldown(login_clock, system, username):
+    app, db, clients = system
+    app.state.settings.login_username_limit = 2
+    client = clients["chris"]
+    for spelling in [username, f" {username.upper()} "]:
+        response = await client.post(
+            "/api/auth/login", json={"username": spelling, "password": "wrong"}
+        )
+        assert response.status_code == 401
+        assert response.json()["error"]["message"] == "Invalid username or password"
+    blocked = await client.post(
+        "/api/auth/login", json={"username": username, "password": PASSWORD}
+    )
+    assert blocked.status_code == 429 and blocked.headers["retry-after"] == "900"
+    # Another key has its own quota regardless of account existence.
+    assert (
+        await client.post("/api/auth/login", json={"username": "other", "password": "wrong"})
+    ).status_code == 401
+    login_clock[0] += timedelta(seconds=899, milliseconds=100)
+    blocked = await client.post(
+        "/api/auth/login", json={"username": username, "password": PASSWORD}
+    )
+    assert blocked.status_code == 429 and blocked.headers["retry-after"] == "1"
+    # Stored expired records still exist: correctness never depends on TTL deletion.
+    login_clock[0] += timedelta(milliseconds=900)
+    assert await db.login_limits.count_documents({}) >= 3
+    response = await client.post(
+        "/api/auth/login", json={"username": username, "password": PASSWORD}
+    )
+    assert response.status_code == (200 if username == "james" else 401)
+    indexes = await db.login_limits.index_information()
+    assert indexes["expires_at_1"]["expireAfterSeconds"] == 0
+
+
+async def test_login_success_counts_and_does_not_reset_failures(login_clock, system):
+    app, db, clients = system
+    app.state.settings.login_username_limit = 3
+    client = clients["chris"]
+    # Fixture's first successful login already consumed one slot.
+    for password, expected in [("wrong", 401), (PASSWORD, 200), (PASSWORD, 429)]:
+        response = await client.post(
+            "/api/auth/login", json={"username": "chris", "password": password}
+        )
+        assert response.status_code == expected
+    assert await db.tokens.count_documents({"username": "chris"}) == 2
+    assert (await client.get("/api/auth/me")).status_code == 200
+    assert (await client.post("/api/auth/logout")).status_code == 204
+    assert (await client.get("/api/auth/me")).status_code == 401
+
+
+@pytest.mark.parametrize("same_username", [True, False])
+async def test_concurrent_login_limits_across_independent_apps(
+    login_clock, system, monkeypatch, same_username
+):
+    app, db, clients = system
+    settings = app.state.settings
+    settings.login_username_limit = 3
+    settings.login_global_limit = 30 if same_username else 8
+    verify = AsyncMock(return_value=False)
+    monkeypatch.setattr("app.routes.auth.verify_password", verify)
+    before = await db.tokens.count_documents({})
+    # Separate client/app, shared database: models another process or restarted worker.
+    mongo = AsyncMongoClient(TEST_URL, tz_aware=True, serverSelectionTimeoutMS=5000)
+    other_app = create_app(settings)
+    other_app.state.db = mongo[db.name]
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=other_app), base_url="http://other"
+        ) as other:
+            responses = await asyncio.gather(
+                *[
+                    (clients["chris"] if i % 2 else other).post(
+                        "/api/auth/login",
+                        json={
+                            "username": "james" if same_username else f"unknown-{i}",
+                            "password": "wrong",
+                        },
+                    )
+                    for i in range(20)
+                ]
+            )
+            allowed = 3 if same_username else 6  # fixture consumed two global slots
+            assert sum(r.status_code == 401 for r in responses) == allowed
+            assert sum(r.status_code == 429 for r in responses) == 20 - allowed
+            assert verify.await_count == allowed
+            assert all("set-cookie" not in r.headers for r in responses)
+            assert await db.tokens.count_documents({}) == before
+            # A fresh limiter sees the durable exhaustion without local state.
+            retry = await other.post(
+                "/api/auth/login",
+                json={"username": "james" if same_username else "new", "password": PASSWORD},
+            )
+            assert retry.status_code == 429
+    finally:
+        await mongo.close()
+
+
+async def test_global_limit_spoofed_headers_and_recovery(login_clock, system):
+    app, db, clients = system
+    app.state.settings.login_global_limit = 4
+    client = clients["chris"]
+    for i, expected in enumerate([401, 401, 429, 429]):
+        response = await client.post(
+            "/api/auth/login",
+            json={"username": f"unknown-{i}", "password": "wrong"},
+            headers={
+                "X-Forwarded-For": f"192.0.2.{i}",
+                "X-Real-IP": f"192.0.2.{i}",
+                "CF-Connecting-IP": f"192.0.2.{i}",
+                "Forwarded": f"for=192.0.2.{i}",
+            },
+        )
+        assert response.status_code == expected
+        if expected == 429:
+            assert response.headers["retry-after"] == "300"
+    # Global rejection does not create more arbitrary username records.
+    assert await db.login_limits.count_documents({}) == 5
+    login_clock[0] += timedelta(seconds=300)
+    assert (
+        await client.post("/api/auth/login", json={"username": "next", "password": "wrong"})
+    ).status_code == 401
+
+
+async def test_username_rejection_conservatively_consumes_global_allowance(login_clock, system):
+    app, db, clients = system
+    app.state.settings.login_username_limit = 1
+    app.state.settings.login_global_limit = 4
+    client = clients["chris"]
+    # chris was admitted once during fixture setup; both retries are username-throttled.
+    for _ in range(2):
+        response = await client.post(
+            "/api/auth/login", json={"username": "chris", "password": PASSWORD}
+        )
+        assert response.status_code == 429 and response.headers["retry-after"] == "900"
+    response = await client.post(
+        "/api/auth/login", json={"username": "fresh", "password": PASSWORD}
+    )
+    assert response.status_code == 429 and response.headers["retry-after"] == "300"
+    assert (await db.login_limits.find_one({"_id": "global"}))["count"] == 4
 
 
 async def board(client):

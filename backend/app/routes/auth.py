@@ -11,6 +11,7 @@ from app.auth import (
     verify_password,
 )
 from app.config import Settings
+from app.ratelimit import LoginLimiter, get_login_limiter
 from app.schemas.auth import LoginIn
 from app.schemas.users import UserOut
 
@@ -29,7 +30,9 @@ async def login(
     users=Depends(get_users),
     tokens=Depends(get_tokens),
     settings: Settings = Depends(get_settings),
+    limiter: LoginLimiter = Depends(get_login_limiter),
 ):
+    await limiter.check(body.username)
     user = await users.find_one({"_id": body.username})
     ok = await verify_password(user["password_hash"] if user else None, body.password)
     if not (user and ok):

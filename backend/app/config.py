@@ -16,3 +16,7 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(min_length=32, repr=False)  # app refuses to start without it
     token_days: int = 7
     cookie_secure: bool = False  # set COOKIE_SECURE=true behind HTTPS
+    login_username_limit: int = Field(default=5, ge=1, le=10000)
+    login_username_window_seconds: int = Field(default=900, ge=1, le=86400)
+    login_global_limit: int = Field(default=30, ge=1, le=10000)
+    login_global_window_seconds: int = Field(default=300, ge=1, le=86400)

@@ -34,7 +34,7 @@ import LoginLayout from '../layouts/LoginLayout.astro';
 </LoginLayout>
 
 <script>
-    import { api, ApiError } from '../lib/api';
+    import { api, loginErrorMessage } from '../lib/api';
     const form = document.querySelector<HTMLFormElement>('.login-form')!;
     const status = document.querySelector<HTMLElement>('#login-status')!;
     const submit = form.querySelector<HTMLButtonElement>('button')!;
@@ -50,10 +50,9 @@ import LoginLayout from '../layouts/LoginLayout.astro';
             await api.login(String(data.get('username')), String(data.get('password')));
             location.replace('/');
         } catch (error) {
-            status.textContent = error instanceof ApiError && error.status === 401
-                ? 'Unable to log in. Check your username and password.'
-                : 'Unable to log in. Check your connection and try again.';
+            status.textContent = loginErrorMessage(error);
         } finally {
+            form.querySelector<HTMLInputElement>('[name="password"]')!.value = '';
             submitting = false;
             submit.disabled = false;
         }

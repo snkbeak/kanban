@@ -38,6 +38,7 @@ def register_errors(app: FastAPI):
             403: "forbidden",
             404: "not_found",
             405: "method_not_allowed",
+            429: "login_throttled",
         }
         return error_response(
             exc.status_code,

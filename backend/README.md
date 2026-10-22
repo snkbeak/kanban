@@ -48,6 +48,28 @@ API: <http://127.0.0.1:8000/api>. Interactive OpenAPI: <http://127.0.0.1:8000/do
 | `MONGO_DB` | `kanban` | Explicit database name; example uses `kanban_dev` |
 | `COOKIE_SECURE` | `false` | Set true over HTTPS |
 | `TOKEN_DAYS` | `7` | JWT/cookie lifetime in days |
+| `LOGIN_USERNAME_LIMIT` | `5` | Attempts per canonical username per window; integer 1–10,000 |
+| `LOGIN_USERNAME_WINDOW_SECONDS` | `900` | Username window; integer 1–86,400 seconds |
+| `LOGIN_GLOBAL_LIMIT` | `30` | Attempts shared across all clients/usernames per window; integer 1–10,000 |
+| `LOGIN_GLOBAL_WINDOW_SECONDS` | `300` | Shared window; integer 1–86,400 seconds |
+
+## Login throttling
+
+Every schema-valid login reserves an allowance **before account lookup and Argon2 verification**. The default is 5 attempts per canonical username per 15 minutes, plus 30 across the entire application per 5 minutes. This permits ordinary logins and typos for three users while bounding both targeted guessing and attempts spread across usernames. Limits cannot be disabled with zero. Invalid request bodies return the existing `422` without consuming allowances or checking credentials.
+
+The `login_limits` collection stores a single `global` key and `username:<SHA-256 of canonical username>` keys. Trimming/lowercasing happens through the existing login schema before key construction. Existing and nonexistent accounts use the same policy, with the same generic invalid-credential response and dummy password verification for admitted unknown accounts. Hashing avoids raw usernames in keys; it is not anonymization of easily guessed usernames. No passwords, JWTs, or addresses are stored in these records.
+
+Each key has a fixed window starting with its first reservation. Exactly the configured number of attempts can proceed within that window. Once exhausted, it rejects until its stored expiry; denied requests do not extend that expiry. Successes and failures count equally and success never resets a counter. The global reservation happens first; if the username reservation rejects or a subsequent database/token operation fails, the global slot is **not refunded**. A globally rejected request never creates a username record. The two reservations are intentionally conservative, not one transaction: partial reservations can reduce availability, but cannot grant extra attempts.
+
+Each reservation uses one atomic MongoDB `find_one_and_update` aggregation pipeline with a unique `_id`, capped counter, MongoDB `$$NOW`, and majority acknowledgement. Concurrent requests and independent processes share the same durable counters. The MongoDB server clock governs expiry; keep database clocks synchronized. Expired records reset in the update itself. The TTL index on `expires_at` is only eventual storage cleanup; delayed cleanup does not prolong cooldowns. The global-first policy also bounds new username-record creation per window, though prolonged TTL-monitor failure can still grow storage. See [MongoDB update pipelines](https://www.mongodb.com/docs/manual/tutorial/update-documents-with-aggregation-pipeline/).
+
+Exhaustion returns `429` with the normal envelope, code `login_throttled`, and a positive integer `Retry-After` in seconds, rounded up from the rejecting key's remaining window. It does not disclose which key rejected. This is the earliest useful retry for that rejection, not a reserved future slot: another key or intervening traffic may still reject a later request. It never issues a token or cookie. A rate-limit store failure or timeout fails closed with the existing generic `503 database_unavailable`, without account lookup/password verification/token issuance. Reservations have a five-second database-operation deadline. There is no in-memory fallback; an ambiguous write may conservatively consume a slot. No connection details are exposed.
+
+Client-address policy: **no address is used as an authorization or throttling key**. Neither socket addresses nor `Forwarded`, `X-Forwarded-For`, `X-Real-IP`, or `CF-Connecting-IP` can select another allowance. All clients share the global bucket even if an ASGI server rewrites the peer address. This is safe for the current direct/local-proxy deployment and protects against distributed guessing, but one caller can exhaust a username or the shared allowance and temporarily deny legitimate logins. Existing sessions, `/me`, logout, and CRUD are unaffected. Fixed windows permit bursts around boundaries; this is not a general HTTP/DDoS or concurrent Argon2 resource limiter.
+
+The future Cloudflare Worker and backend-origin protection remain **pending**. Authenticate the proxy at the backend and prevent direct origin bypass before introducing any per-client-address policy. The Worker must overwrite caller-supplied forwarding headers with its authoritative address, and backend server/proxy middleware must trust only that authenticated path. Keep username/global protection if an additional address bucket is added. Preserve `429`, `Retry-After`, cookies, and error envelopes and disable API caching. No proxy secret/header trust or CSRF contract is added here.
+
+Use identical settings and the same application database on every backend process; separate test/preview databases. Window changes take effect on the next window for existing records; limit changes apply on the next attempt. Deploy configuration changes consistently. Startup creates the TTL index idempotently. Restarts do not reset counters; do not clear the collection as a routine recovery step. Monitor generic `429`/`503` counts without logging request bodies, passwords, JWTs, or credential-bearing database URLs.
 
 ## Accounts and development reset
 
@@ -178,6 +200,7 @@ Handled API errors use this envelope. Validation details contain paths/messages 
 | `404` | Missing resource; `not_found` |
 | `409` | `version_conflict`, `order_conflict` |
 | `422` | `validation_error`, `invalid_assignees`, `blocked_health`, `invalid_anchor`, `missing_order_versions`, `comment_limit_reached` |
+| `429` | `login_throttled`; login only, with `Retry-After` seconds |
 | `503` | `database_unavailable`; no connection details exposed |
 
 Startup fails for unavailable MongoDB, unsupported topology, or legacy accounts. At runtime readiness/database failures return generic `503`; liveness remains independent of MongoDB.
@@ -203,6 +226,8 @@ Each integration test creates and finally drops only its generated `kanban_test_
 
 Verification on October 20, 2026: **78 contract tests passed; all 13 real Atlas integration tests passed; Ruff lint and formatting checks passed.** Integration databases were removed afterward. No application database was inspected or reset. The contract suite reports an upstream Starlette TestClient deprecation warning about its HTTPX adapter; test assertions pass.
 
+Login-throttling verification on October 21, 2026: **99 contract/unit tests and 20 real local MongoDB integration tests passed (119 total; none skipped)**, using an explicit loopback `MONGO_TEST_URL` and generated disposable databases only. Ruff lint/format checks passed. New coverage includes exact thresholds, success/failure accounting, normalized/existing/nonexistent usernames, key isolation, deterministic cooldown recovery without TTL deletion, concurrent HTTP requests across independent apps/database clients, spoofed forwarding headers, insert collisions, and fail-closed database failures/timeouts. Tests assert rejected requests do not verify passwords or issue tokens/cookies. Existing authentication/revocation/CRUD checks also passed. The upstream Starlette/HTTPX deprecation warning remains. Atlas, live application accounts, production proxy, deployment, and origin/CSRF acceptance were not run as part of this change.
+
 Before running the application with an Atlas-only `.env`, add a random `JWT_SECRET`, explicitly select `MONGO_DB` (for example `kanban_dev`), and create the intended accounts. Test fixtures use their own secrets and accounts and do not provision the application database.
 
 Local application verification on October 20: the user configured a loopback development `MONGO_URL`, explicit `MONGO_DB=kanban_dev`, a valid JWT secret, and `COOKIE_SECURE=false`. With explicit user authorization, a one-off insert created the three previously absent local accounts; no startup seed or password reset was added. All three login/me/logout checks and two real browser journeys through Astro's proxy passed, covering conflicts, recovery, card/comment CRUD, and reload/order persistence. Only their three acceptance tickets were removed, leaving the accounts and normal counter/order advances. The production `MONGODB_URI` was not contacted. Atlas application provisioning remains manual and outside this local verification.
@@ -213,4 +238,4 @@ The frontend now connects these routes while preserving the existing Astro desig
 
 The column selector appends to another column and disables its current option. Drag-and-drop is the only UI control for within-column ordering and supplies the drop anchor. Disable reordering while filters hide cards; allow selector moves. Keep the complete board for local search/filter/count/display-pagination behavior.
 
-Login throttling and origin/CSRF protection remain outside this delivery, tracked in [the authentication follow-up](../.agent/07-auth-follow-up.md). Frontend wiring is implemented and covered by isolated browser fixtures; hosting and live application verification remain separate work.
+Login throttling and frontend retry messaging are implemented; origin/CSRF protection remains pending in [the authentication follow-up](../.agent/07-auth-follow-up.md). Frontend wiring is covered by isolated browser fixtures; hosting and production application verification remain separate work.

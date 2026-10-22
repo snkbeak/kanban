@@ -1,4 +1,4 @@
-import { api, ApiError, columns, type Card, type Column, type Comment, type Content, type User } from '../lib/api';
+import { api, ApiError, columns, loginErrorMessage, type Card, type Column, type Comment, type Content, type User } from '../lib/api';
 import { BoardState, contentChanges, contentOf, matches, type Filters } from '../lib/board-state';
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string, root: ParentNode = document) => root.querySelector<T>(selector)!;
@@ -501,8 +501,11 @@ $<HTMLFormElement>('#session-form').addEventListener('submit', async event => {
     $('#session-status').textContent = ''; sessionDialog.close();
     await initialize();
   } catch (error) {
-    $('#session-status').textContent = error instanceof ApiError && error.status === 401 ? 'Unable to log in. Check your username and password.' : 'Unable to log in. Check your connection and try again.';
-  } finally { button.disabled = false; }
+    $('#session-status').textContent = loginErrorMessage(error);
+  } finally {
+    $<HTMLInputElement>('[name="password"]', loginForm).value = '';
+    button.disabled = false;
+  }
 });
 setInterval(() => { if (user && !document.hidden && !busy && !dragged) void refresh(); }, 15000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !busy && !dragged) void refresh(); });

@@ -1,11 +1,12 @@
 # Next steps
 
-Updated October 20, 2026. This is the active checklist for work remaining after backend CRUD delivery. The confirmed decisions and implementation resolutions in [06-backend-crud.md](06-backend-crud.md) are authoritative. API examples and setup commands are in [backend/README.md](../backend/README.md).
+Updated October 21, 2026. This is the active checklist for work remaining after backend CRUD delivery. The confirmed decisions and implementation resolutions in [06-backend-crud.md](06-backend-crud.md) are authoritative. API examples and setup commands are in [backend/README.md](../backend/README.md).
 
 ## Completed baseline
 
 - Username is the account primary key; public users contain username only.
 - Cookie/JWT authentication, revocable tokens, account creation/password reset, and read-only account listing are implemented.
+- Login throttling is implemented: configurable MongoDB allowances of 5 per canonical username per 15 minutes and 30 shared per 5 minutes, before password verification; both login screens explain retry time. Origin/CSRF and deployment remain pending.
 - Card/comment CRUD, persistent ordering, version preconditions, Blocked health rules, comment ownership, the 20-comment cap, and health endpoints are implemented.
 - Verification recorded at backend delivery: 78 contract tests and 13 real Atlas integration tests passed, plus Ruff lint/format checks.
 - Atlas connectivity was verified using disposable test databases, which were removed. Application accounts/data were not provisioned or reset.
@@ -65,7 +66,7 @@ Done when two browser sessions see each other's updates without losing drafts or
 - The live opt-in prerequisite fails safely when configuration is absent. With the authorized local setup, both journeys passed (each run once): login/HttpOnly cookies, content/order conflicts, retained drafts through polling/offline/revoked-session recovery, independent discussion updates, selector/Blocked behavior, drag order, and reload persistence; then author-only comment changes, stale comment edits, committed-but-lost response recovery without automatic replay, the 20-comment cap/slot reuse, and guarded whole-card deletion after another session's discussion update. All three account login/me/logout cycles also passed through the proxy.
 - Only three marked acceptance tickets were created and removed using guarded deletes. Final local audit: three accounts retained, zero cards, zero test session tokens, ticket counter at 3 (not reset). Other data was not reset. Credentials remain in ignored `frontend/.env.live`; see [live check instructions](../frontend/README.md#live-fastapiatlas-acceptance).
 - Astro initially returned a route-manifest 500 after dependency reoptimization. The documented stop/start recovered it; a real unauthenticated browser then reached login with no page errors. FastAPI readiness and proxied readiness returned 200; unauthenticated `/auth/me` returned 401. No frontend design or application behavior changes were necessary.
-- Still pending: Atlas/production application acceptance, backend restart/redeploy persistence, live mobile/keyboard usability, and additional concurrent comment-deletion edge cases. Throttling and origin/CSRF remain exclusively in `07-auth-follow-up.md`.
+- Still pending: Atlas/production application acceptance, backend restart/redeploy persistence, live mobile/keyboard usability, and additional concurrent comment-deletion edge cases. Implemented throttling and pending origin/CSRF are detailed in `07-auth-follow-up.md`.
 
 ## 4. Deploy the complete application
 
@@ -96,4 +97,9 @@ Done when the multi-user browser workflow, deployment persistence, and backup re
 
 ## Separate authentication follow-up
 
-Login throttling and origin/CSRF protection remain tracked in [07-auth-follow-up.md](07-auth-follow-up.md), including their eventual frontend integration. They were excluded from backend CRUD delivery and are not assumed to exist in the current API. Their mechanism, configuration, and tests must be planned there; do not invent a CSRF token/header contract while wiring the current frontend.
+- [x] Implement configurable, persistent, atomic MongoDB login throttling and frontend `429`/retry-time handling. [Policy/settings](../backend/README.md#login-throttling): all attempts count, global reservations are retained on later rejection, fixed cooldowns never extend on rejection, and database failure returns generic `503` before credential work. No client address or forwarding header selects an allowance.
+- [x] Verify backend contracts and real concurrent requests against disposable local MongoDB databases: **119 passed, none skipped** (99 contract/unit + 20 integration). Ruff lint/format checks passed. The upstream Starlette/HTTPX deprecation warning remains. Atlas and live application accounts were not used; no provisioning, reset, or deployment occurred.
+- [x] Verify frontend throttling: **11 API/state tests, 14 isolated Chromium journeys, Astro/TypeScript checks, and production build passed**; none skipped. Both login forms show retry guidance, clear passwords, and require explicit retry. The browser clock advances deterministically. Node's sandbox `spawn EPERM` was resolved by an approved rerun.
+- [ ] Resolve Astro dev-server route-loading 500s as separate maintenance. The October 21 browser run initially failed before application scripts loaded; stop/start did not recover it. All 14 journeys passed against the built site's local `astro preview` instead. No live API proxy/production acceptance is inferred from fixture results.
+- [ ] Implement origin/CSRF protection and its frontend contract, tracked in [07-auth-follow-up.md](07-auth-follow-up.md).
+- [ ] Complete authenticated Cloudflare proxy/backend-origin protection and production acceptance. Shared limits work now; one attacker can temporarily deny new logins. Only add address-specific trust after authenticating the proxy and preventing origin bypass. Preserve `429`, `Retry-After`, cookies, and API error envelopes without caching.

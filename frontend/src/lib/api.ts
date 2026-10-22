@@ -28,11 +28,33 @@ export class ApiError extends Error {
   status: number;
   code: string;
   fields: FieldError[];
-  constructor(status: number, code: string, message: string, fields: FieldError[] = []) {
+  retryAfterSeconds: number | null;
+  constructor(status: number, code: string, message: string, fields: FieldError[] = [], retryAfterSeconds: number | null = null) {
     super(message);
     this.status = status; this.code = code; this.fields = fields;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
   get uncertain() { return this.status === 0 || this.status >= 500; }
+}
+
+function retryAfter(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = /^\d+$/.test(value) ? Number(value) : (Date.parse(value) - Date.now()) / 1000;
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.max(1, Math.ceil(seconds)) : null;
+}
+
+export function loginErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 429) {
+      const seconds = error.retryAfterSeconds;
+      return seconds === null
+        ? 'Too many login attempts. Please wait a few minutes before trying again.'
+        : `Too many login attempts. Try again after ${new Date(Date.now() + seconds * 1000).toLocaleTimeString()} (in ${seconds} seconds).`;
+    }
+    if (error.status === 401) return 'Unable to log in. Check your username and password.';
+    if (error.status === 503) return 'Login is temporarily unavailable. Please try again later.';
+  }
+  return 'Unable to log in. Check your connection and try again.';
 }
 
 export async function request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
@@ -53,7 +75,8 @@ export async function request<T>(path: string, method = 'GET', body?: unknown, s
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     throw new ApiError(response.status, payload?.error?.code ?? 'gateway_error',
-      payload?.error?.message ?? `Server request failed (${response.status}).`, payload?.error?.fields ?? []);
+      payload?.error?.message ?? `Server request failed (${response.status}).`, payload?.error?.fields ?? [],
+      retryAfter(response.headers.get('Retry-After')));
   }
   if (payload === null) throw new ApiError(502, 'invalid_response', 'The server returned an unexpected response. Refresh to check the result.');
   return payload as T;

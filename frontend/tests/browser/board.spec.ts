@@ -17,6 +17,7 @@ async function backend(page: Page, cards = [makeCard(), makeCard('b')]) {
     board: { cards, order_versions: { review: 2, backlog: 0, in_progress: 0, done: 0, blocked: 0 } } as Board,
     calls: [] as Call[], signedIn: true, username: 'chris', uncertainComment: false,
     failReads: false, conflictDelete: false, conflictMove: false, failNextComment: 0,
+    loginRetryAfter: 0,
     pendingRead: null as null | (() => Promise<void>), holdRead: false,
   };
   const error = (route: Route, status: number, code: string) => route.fulfill({ status, json: { error: { code, message: code, fields: [] } } });
@@ -28,6 +29,10 @@ async function backend(page: Page, cards = [makeCard(), makeCard('b')]) {
     const body = request.postDataJSON();
     fixture.calls.push({ path: url.pathname + url.search, method, body });
     if (path === '/auth/login') {
+      if (fixture.loginRetryAfter) return route.fulfill({ status: 429,
+        headers: { 'Retry-After': String(fixture.loginRetryAfter) },
+        json: { error: { code: 'login_throttled', message: 'Too many login attempts', fields: [] } },
+      });
       if (body.password !== 'password123') return error(route, 401, 'unauthenticated');
       fixture.username = body.username.trim().toLowerCase(); fixture.signedIn = true;
       return route.fulfill({ json: { username: fixture.username } });
@@ -126,6 +131,38 @@ test('login, restoration, generic failure and logout', async ({ page }) => {
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page).toHaveURL(/\/login$/);
 });
+
+for (const recovery of [false, true]) {
+  test(`throttling explains retry time without replay in ${recovery ? 'session recovery' : 'login'}`, async ({ page }) => {
+    const fixture = await backend(page);
+    if (recovery) {
+      await page.goto('/'); await expect(page.locator('#current-user')).toHaveText('chris');
+      fixture.signedIn = false; await refresh(page);
+      await expect(page.locator('#session-dialog')).toBeVisible();
+    } else {
+      fixture.signedIn = false; await page.goto('/login');
+    }
+    await page.clock.install();
+    const form = page.locator(recovery ? '#session-form' : '.login-form');
+    const status = page.locator(recovery ? '#session-status' : '#login-status');
+    fixture.loginRetryAfter = 60;
+    await form.locator('[name="username"]').fill('chris');
+    await form.locator('[name="password"]').fill('password123');
+    await form.locator('button').click();
+    await expect(status).toContainText('Too many login attempts. Try again after');
+    await expect(status).toContainText('in 60 seconds');
+    await expect(form.locator('[name="password"]')).toHaveValue('');
+    await page.clock.fastForward(61000);
+    expect(fixture.calls.filter(call => call.path === '/api/auth/login')).toHaveLength(1);
+    expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
+    fixture.loginRetryAfter = 0;
+    await form.locator('[name="password"]').fill('password123');
+    await form.locator('button').click();
+    await expect(page.locator('#current-user')).toHaveText('chris');
+    if (recovery) await expect(page.locator('#session-dialog')).toBeHidden();
+    expect(fixture.calls.filter(call => call.path === '/api/auth/login')).toHaveLength(2);
+  });
+}
 
 test('create defaults, required tag, content edit, assignments and safe plain text', async ({ page }) => {
   const fixture = await backend(page, []);

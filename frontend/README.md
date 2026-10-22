@@ -61,9 +61,18 @@ in browser storage. After an uncertain write, editing stays blocked until a
 successful refresh; inspect the result before explicitly authorizing another
 write. Creates/comments are never automatically retried.
 
-Login throttling and origin/CSRF protection are still separate work in
-[07-auth-follow-up.md](../.agent/07-auth-follow-up.md). No new token/header contract
-is assumed by this client.
+Both the login page and the expired-session dialog explain `429` throttling using
+`Retry-After`: they show the wait in seconds and a local retry time. If the header
+is missing or invalid, they ask the user to wait a few minutes. A `503` explains
+that login is temporarily unavailable. Password fields clear after every submitted
+attempt; credentials are never retained in persistent browser storage. There are
+no automatic login replays or timer-triggered retries; the user must submit again.
+Retry time is guidance, not a reservation; other traffic may exhaust the allowance.
+The default backend policy is 5 attempts per canonical username per 15 minutes
+and 30 shared across everyone per 5 minutes, counting successes and failures.
+See [backend policy and settings](../backend/README.md#login-throttling).
+Origin/CSRF protection remains pending in
+[07-auth-follow-up.md](../.agent/07-auth-follow-up.md); no CSRF contract is added.
 
 ## Focused checks
 
@@ -85,6 +94,20 @@ dialog/focus behavior without reading secrets, provisioning users, or accessing
 Atlas. It supplements the backend's contract/Atlas tests; it does not establish a
 live FastAPI/Atlas browser session or production cookie/proxy behavior. Complete
 those checks after deliberately selecting and provisioning the application database.
+
+October 21 throttling verification: **11 API/state tests and 14 isolated Chromium
+journeys passed; Astro/TypeScript checks and the production build passed**. Browser
+coverage includes both login forms' retry guidance, clearing passwords, empty
+browser storage, and explicit retries after advancing the test clock. No tests
+were skipped. Node's sandbox `spawn EPERM` was resolved by an approved rerun.
+
+The initial browser run failed because the Astro dev server returned route-loading
+500s before application scripts loaded. Stop/start did not recover it this time.
+All 14 tests subsequently passed against the built static site using
+`npm run preview -- --host 127.0.0.1 --port 4321` (stop the dev server first).
+This is valid for the intercepted HTTP fixtures, which do not need an API proxy;
+it does not establish live proxy acceptance. The dev-server route issue remains
+separate maintenance work. No live accounts, Atlas, or deployment were used.
 
 ## Live FastAPI/Atlas acceptance
 

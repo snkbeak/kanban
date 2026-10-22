@@ -6,7 +6,7 @@ Start here: [Next steps](next-steps.md) records the completed baseline and the r
 
 Current backend contract: [Backend CRUD plan and implementation resolutions](06-backend-crud.md). Username identity and CRUD are implemented; 78 contract tests and 13 real Atlas integration tests pass. Its decisions supersede conflicting assumptions in earlier plans. Setup and payload examples are in [backend/README.md](../backend/README.md).
 
-Separate follow-up: [Authentication follow-up](07-auth-follow-up.md) tracks login throttling and origin/CSRF protection outside CRUD scope.
+Separate follow-up: [Authentication follow-up](07-auth-follow-up.md) records implemented MongoDB login throttling and frontend retry handling (October 21), with origin/CSRF protection still pending outside CRUD scope.
 
 Supporting plans:
 
