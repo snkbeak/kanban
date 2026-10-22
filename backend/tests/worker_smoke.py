@@ -17,6 +17,7 @@ from uuid import uuid4
 
 from argon2 import PasswordHasher
 from pymongo import MongoClient
+from worker_runtime import check_sidecars, cleanup_runtime, runtime_snapshot
 
 if os.name == "nt":
     raise SystemExit(
@@ -32,6 +33,7 @@ compose = ["docker", "compose", "-p", project, "-f", str(root / "compose.test.ym
 origin = "http://127.0.0.1:8787"
 process = None
 mongo = None
+log = None
 
 
 def run(args, **kwargs):
@@ -120,6 +122,7 @@ try:
     while time.monotonic() < startup_deadline:
         if process.poll() is not None:
             raise RuntimeError(f"Wrangler exited; inspect {test_dir / 'runtime.log'}")
+        check_sidecars(project)
         try:
             if call("/api/health/ready")[0] == 200:
                 break
@@ -184,14 +187,27 @@ try:
         "PASS: real local Worker/assets/container/MongoDB auth, CSRF, throttling, CRUD and logout"
     )
 finally:
-    if process is not None and process.poll() is None:
-        # Stop only our process group. SIGINT lets Wrangler remove its local test container.
-        os.killpg(process.pid, signal.SIGINT)
+    try:
+        (test_dir / "runtime-state.json").write_text(
+            json.dumps(runtime_snapshot(project), indent=2)
+        )
+    finally:
         try:
-            process.wait(timeout=20)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait(timeout=5)
-    if mongo is not None:
-        mongo.close()
-    run([*compose, "down", "--volumes", "--remove-orphans"])
+            if process is not None and process.poll() is None:
+                # Stop only our process group before removing any leftover test sidecar.
+                os.killpg(process.pid, signal.SIGINT)
+                try:
+                    process.wait(timeout=20)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait(timeout=5)
+        finally:
+            if log is not None:
+                log.close()
+            if mongo is not None:
+                mongo.close()
+            (test_dir / ".dev.vars").unlink(missing_ok=True)
+            try:
+                cleanup_runtime(project)
+            finally:
+                run([*compose, "down", "--volumes", "--remove-orphans"])

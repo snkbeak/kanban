@@ -291,5 +291,7 @@ deliberate setup. No secrets belong in Astro/browser environment variables.
 
 October 21 preparation: 12 API/state tests, 6 Worker tests, 17 Chromium fixtures,
 Astro/TypeScript checks, build and deployment dry-run passed. Full local Wrangler
-acceptance is blocked by a WSL networking-sidecar startup failure; browser fixtures
+acceptance is blocked by missing socket-match/TPROXY support in WSL kernel 5.15.146.1; browser fixtures
 used static preview. See the [verification record](../.agent/05-cloudflare-deployment.md#container-preparation-verification-october-21-2026).
+The [WSL diagnosis](../.agent/05-cloudflare-deployment.md#wsl-networking-diagnosis-october-21-2026)
+records the exact failing rules and the proposed update/restart, which has not been performed.

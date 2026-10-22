@@ -48,7 +48,7 @@ Run the container smoke test from `backend/` using the existing virtual environm
 
 In Linux/WSL, with the required Python and Linux Node dependencies installed, run `python3 tests/worker_smoke.py` from `backend/`.
 
-The first builds the production image and runs real auth, proxy/CSRF, throttling and CRUD checks on an isolated Docker MongoDB replica set, then restarts the API and verifies sessions, allowances and content survive. The second uses local Wrangler, the actual container, built static assets, generated fixture credentials and a separate disposable MongoDB replica set. Both use uniquely named Compose projects and remove only their own containers/volumes. Neither reads application .env files or contacts Atlas. The Worker check requires frontend `npm run build` first and free port 8787. Test logs/config live under ignored `.wrangler/`.
+The first builds the production image and runs real auth, proxy/CSRF, throttling and CRUD checks on an isolated Docker MongoDB replica set, then restarts the API and verifies sessions, allowances and content survive. The second uses local Wrangler, the actual container, built static assets, generated fixture credentials and a separate disposable MongoDB replica set. Both use uniquely named Compose projects and remove only their own containers/volumes. Neither reads application .env files or contacts Atlas. The Worker check requires frontend `npm run build` first and free port 8787. Test logs/config live under ignored `.wrangler/`. The Worker harness now detects stopped sidecars during readiness, records only nonsecret state in `runtime-state.json`, removes its generated `.dev.vars`, and removes leftover Worker containers/sidecars by exact generated project/name and immutable Docker ID after stopping Wrangler. It does not prune images or build cache.
 
 From `frontend/`:
 
@@ -93,5 +93,42 @@ References: [Containers getting started](https://developers.cloudflare.com/conta
 - **257 backend tests passed, none skipped**: 234 contract/unit and 23 integration tests using disposable local MongoDB databases. Ruff lint/format passed; the upstream Starlette/HTTPX warning remains.
 - **12 frontend API/state tests, 6 Worker tests and 17 isolated Chromium journeys passed**. Astro/TypeScript checks, production build and Wrangler deployment dry-run passed. Browser fixtures used built static preview, not a live API proxy.
 - The production Docker image passed auth, ingress/Origin rejection, throttling, CRUD, non-root/no-.env checks and restart persistence against a disposable Docker MongoDB replica set.
-- **Full local Worker-to-container acceptance did not pass**: native Windows Wrangler rejects container development; WSL reached image build but its `cloudflare/proxy-everything` networking sidecar exited with status 1 and readiness timed out. The exact cause remains undiagnosed. Environment: Docker Desktop 4.29.0 / engine 26.0.0, Wrangler 4.151.2. Check/update the local Docker/WSL environment and rerun `tests/worker_smoke.py` before considering local routing accepted. Test MongoDB containers/volumes and the stopped test sidecar were removed.
+- **Full local Worker-to-container acceptance remains blocked**: the WSL kernel lacks the sidecar's socket-match and TPROXY features. The follow-up below establishes this with isolated rule probes and the running kernel configuration. It is not an application, Atlas, billing, or ARM64 image-selection diagnosis. Test MongoDB containers/volumes and stopped sidecars were removed.
 - No application accounts/data, Atlas settings, remote secrets or deployments were changed. Production ingress, Atlas connectivity, sleep/wake, rollout persistence, backups and public-hostname acceptance remain pending.
+
+## WSL networking diagnosis (October 21, 2026)
+
+Environment: Windows 10 build 19045, WSL 2.1.5.0, Ubuntu and Docker sharing kernel `5.15.146.1-microsoft-standard-WSL2`, Docker Desktop 4.29.0 / Engine 26.0.0, Linux AMD64, cgroup v1. Wrangler 4.151.2 and `@cloudflare/containers` 0.3.7 use isolated Linux Node 24.19.0 under `frontend/.wrangler/wsl-tools/`.
+
+The exact cached sidecar is `cloudflare/proxy-everything:3cb1195@sha256:0ef6716c52430096900b150d84a3302057d6cd2319dae7987128c85d0733e3c8`; Docker confirms `amd64`. An unmodified harness rerun (`kanban-worker-test-8e5e0e0b0075`) built the application image, then timed out before readiness. Workerd explicitly reported `started sidecar not running`. The stopped sidecar had exit 1, `OOMKilled=false`, empty Docker state error, and `NET_ADMIN`. Its command enabled DNS/TLS interception and disabled IPv6. MongoDB was healthy; FastAPI never launched. Empty Wrangler-sidecar logs did not identify the cause.
+
+Running that cached image directly with `NET_ADMIN` in a disposable, separate network namespace produced the missing diagnostic: the IPv4 socket-match rule failed with `Extension socket revision 0 not supported, missing kernel module?` and `RULE_APPEND failed (No such file or directory)`; the sidecar exited 1. An independent TPROXY rule probe also failed (iptables exit 4). The running kernel's `/proc/config.gz` confirms:
+
+```text
+# CONFIG_NETFILTER_XT_MATCH_SOCKET is not set
+# CONFIG_NETFILTER_XT_TARGET_TPROXY is not set
+# CONFIG_NF_TPROXY_IPV4 is not set
+# CONFIG_NF_TPROXY_IPV6 is not set
+```
+
+These are compiled-out capabilities; installing an Ubuntu userspace package or calling `modprobe` cannot add them to this running kernel. Cloudflare's [exact sidecar source](https://github.com/cloudflare/proxy-everything/blob/3cb1195/main.go#L978-L1009) requires the failing socket rule before its TPROXY rules. [Workers SDK issue 14056](https://github.com/cloudflare/workers-sdk/issues/14056) independently reports the WSL socket-module prerequisite, although that issue's subsequent HTTPS-reset problem was **not** reproduced here. [Sandbox issue 522](https://github.com/cloudflare/sandbox-sdk/issues/522) concerns ARM64 image selection; its workaround does not address this AMD64 kernel failure. Keep Cloudflare's [local development guidance](https://developers.cloudflare.com/containers/guides/local-dev/) as the general setup reference.
+
+Repeat the capability probes from PowerShell (cached image only; each container removes itself, and rules are confined to its own namespace):
+
+```powershell
+$sidecarImage = 'cloudflare/proxy-everything:3cb1195@sha256:0ef6716c52430096900b150d84a3302057d6cd2319dae7987128c85d0733e3c8'
+docker run --rm --pull=never --cap-add NET_ADMIN --entrypoint iptables $sidecarImage -t mangle -A PREROUTING -p tcp -m socket -j ACCEPT
+docker run --rm --pull=never --cap-add NET_ADMIN --entrypoint iptables $sidecarImage -t mangle -A PREROUTING -p tcp -j TPROXY --tproxy-mark 0x1/0x1 --on-port 41209
+```
+
+The smallest next system action is an approved **WSL update and restart**, then rerun both probes before full acceptance. Microsoft's [6.6 kernel configuration](https://github.com/microsoft/WSL2-Linux-Kernel/blob/linux-msft-wsl-6.6.y/arch/x86/configs/config-wsl) includes both Xtables features as modules, unlike the current running kernel. This supports testing a newer WSL kernel; it does not establish that an arbitrary Docker upgrade fixes the issue or guarantee module availability in the Docker runtime after updating.
+
+Before any update/restart, save WSL work and coordinate Docker downtime: `wsl --shutdown` terminates **all** WSL distributions and the shared VM. With explicit authorization, use Microsoft's documented `wsl --update`, then restart WSL/Docker Desktop in the agreed window. Recheck `wsl --version`, Ubuntu `uname -r`, and Docker's kernel version, confirm the two probes pass, and rerun:
+
+```powershell
+wsl -d Ubuntu -- env PATH=/mnt/c/Users/cjmga/Code/kanban/frontend/.wrangler/wsl-tools/node-v24.19.0-linux-x64/bin:/usr/local/bin:/usr/bin:/bin PYTHONPATH=/mnt/c/Users/cjmga/Code/kanban/frontend/.wrangler/wsl-tools/python WRANGLER_CLI=/mnt/c/Users/cjmga/Code/kanban/frontend/.wrangler/wsl-tools/node_modules/wrangler/bin/wrangler.js python3 /mnt/c/Users/cjmga/Code/kanban/backend/tests/worker_smoke.py
+```
+
+Microsoft documents [update and shutdown behavior](https://learn.microsoft.com/en-us/windows/wsl/basic-commands). No update, restart, custom kernel installation, global network change, or sidecar bypass was performed. If updating is unsuitable, use a separate Linux development environment whose Docker kernel passes the same probes. Only a full successful harness run accepts Worker routing; passing kernel probes alone is insufficient. MongoDB connectivity through the sidecar remains untested beyond startup.
+
+Follow-up verification: **8 diagnostics/cleanup guard tests passed**, none skipped; Ruff lint and format checks passed for all three changed Python files. The updated real WSL run (`kanban-worker-test-99e870a20e77`) failed promptly on the stopped sidecar and retained its sanitized state under `frontend/.wrangler/<project>/runtime-state.json`. Its generated secrets, sidecar and Compose resources were removed. The baseline rerun's stopped sidecar was explicitly removed. No application acceptance assertion ran in either attempt. The earlier 257 backend, 12 frontend, 6 Worker and 17 browser results remain historical; those suites were not rerun for these harness-only changes.

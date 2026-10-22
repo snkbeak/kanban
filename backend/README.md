@@ -311,8 +311,13 @@ It needs Linux Node, frontend dependencies, Docker access, PyMongo and argon2-cf
 built frontend assets and free port 8787. An optional `WRANGLER_CLI` points to an
 isolated Linux Wrangler installation. The script uses generated fixture credentials
 and a separate disposable database, never existing application accounts.
+Stopped sidecars now fail readiness promptly. The harness records nonsecret
+`runtime-state.json`, deletes generated `.dev.vars`, and removes only its exact
+test Worker containers/sidecars after stopping Wrangler, including failure paths.
 
 October 21 preparation: 257 backend tests (none skipped), Ruff checks and the
 production Docker smoke/restart test passed. Full local Wrangler acceptance is
-blocked by a WSL networking-sidecar startup failure; deployment and Atlas
+blocked by missing socket-match/TPROXY support in WSL kernel 5.15.146.1; deployment and Atlas
 acceptance remain pending. See the [verification record](../.agent/05-cloudflare-deployment.md#container-preparation-verification-october-21-2026).
+The [diagnosis and next action](../.agent/05-cloudflare-deployment.md#wsl-networking-diagnosis-october-21-2026)
+include isolated capability probes and the WSL update/restart prerequisite.
