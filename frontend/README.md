@@ -8,7 +8,7 @@ existing site is separate.
 The board uses the FastAPI contract for cookie authentication, users, cards,
 comments, and manual ordering. Astro still emits static assets; browser code
 loads the complete board and applies search/filter/counts locally. The production
-Cloudflare `/api` proxy and backend hosting remain pending in
+Cloudflare `/api` Worker and FastAPI Container are prepared; deployment remains pending in
 [the deployment plan](../.agent/05-cloudflare-deployment.md).
 
 ## Local development
@@ -83,11 +83,10 @@ retain content/comment drafts and the session, without automatic replay. Keep
 the tab open during configuration repair; page reload/navigation still loses
 in-memory drafts. See the [complete policy and production settings](../backend/README.md#origin--csrf-protection).
 
-The future Worker must preserve the browser Origin unchanged, never synthesize
-it, and preserve cookies, error envelopes, statuses and Retry-After without API
-caching. Strict Origin checks do not authenticate this proxy or prevent direct
-backend access. Deployment, proxy authentication/backend-origin protection and
-production acceptance remain pending.
+The prepared Worker preserves browser Origin, cookies, error envelopes, statuses
+and Retry-After without API caching. It authenticates to the container using a
+separate runtime secret and strips caller-supplied proxy headers. Deployment and
+live backend-origin/production acceptance remain pending.
 
 ## Focused checks
 
@@ -232,10 +231,18 @@ server:
 npm run preview:cloudflare
 ```
 
+This now runs the full local Worker/container setup at `http://127.0.0.1:8787`.
+**Use Linux/WSL** with Docker and Linux Node dependencies: Wrangler does not support
+local Containers directly on Windows. First copy `.dev.vars.example` to ignored
+`.dev.vars` and supply development-only MongoDB and random JWT/proxy secrets.
+`wrangler.local.jsonc` selects `kanban_container_dev`; no accounts are seeded.
+Use a separate Linux dependency install rather than overwriting Windows node_modules.
+
 Stop either foreground preview with Ctrl+C. Neither preview publishes the site.
 
-These static previews do not provide the development API proxy. Use `npm run dev`
-for a working local API connection until the production Worker proxy is implemented.
+Astro static preview does not provide an API proxy. Astro dev uses its existing
+proxy to separately started FastAPI; Cloudflare preview uses the real Worker and
+container with separate local configuration.
 
 ## Deploy when ready
 
@@ -246,7 +253,7 @@ when you intend to deploy:
 npm run deploy
 ```
 
-Wrangler uses `wrangler.jsonc` to upload `dist/` and attach the custom domain
+Wrangler uses `wrangler.jsonc` to upload `dist/`, deploy the API Worker/container, and attach the custom domain
 `kanban.sneakybeak.net`. Cloudflare provisions the custom-domain DNS record and
 certificate during setup. The domain must belong to an active zone in the same
 account; resolve a conflicting record for that exact subdomain if Cloudflare
@@ -259,3 +266,30 @@ an Astro Cloudflare SSR adapter. See [Cloudflare's Astro guide](https://develope
 No deployment or DNS changes are performed by installing dependencies or editing
 these files. Keep local secrets in ignored `.dev.vars` files; never put them in
 `wrangler.jsonc` or browser-visible assets.
+
+
+## Container deployment preparation
+
+The Worker routes only `/api` and `/api/*` to one named FastAPI container. Static
+assets remain separate; the API uses an exact public-origin check, a 20-second
+upstream deadline, no automatic write retries, and no caching. Missing secrets
+fail closed. Unexpected container HTML/redirects become generic gateway errors.
+The production hostname remains `https://kanban.sneakybeak.net`; alternate Worker
+URLs stay disabled. `MONGO_DB=kanban_prod` is the proposed production database and
+must be confirmed before publication.
+
+Run `npm run test:worker` for isolated proxy contracts, `npm run check` for Astro
+and Worker TypeScript checks, and `npm run deploy:check` to build/bundle the image
+without publishing. Full disposable Docker and local Worker checks are documented
+in the [deployment guide](../.agent/05-cloudflare-deployment.md).
+
+The initial container is basic (1 GiB/1/4 vCPU), capped at one instance, sleeping
+after two idle minutes. Visible board polling keeps it awake; this is not a $5
+monthly spending cap. Configure usage alerts before launch. Production secrets,
+Atlas networking, account provisioning, deployment and live acceptance still need
+deliberate setup. No secrets belong in Astro/browser environment variables.
+
+October 21 preparation: 12 API/state tests, 6 Worker tests, 17 Chromium fixtures,
+Astro/TypeScript checks, build and deployment dry-run passed. Full local Wrangler
+acceptance is blocked by a WSL networking-sidecar startup failure; browser fixtures
+used static preview. See the [verification record](../.agent/05-cloudflare-deployment.md#container-preparation-verification-october-21-2026).

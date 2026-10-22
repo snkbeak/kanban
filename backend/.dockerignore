@@ -1,0 +1,6 @@
+# Only these files may enter the image/build context. Never send .env or local data.
+**
+!pyproject.toml
+!uv.lock
+!app/
+!app/**/*.py

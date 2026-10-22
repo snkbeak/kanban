@@ -1,0 +1,10 @@
+{
+  "extends": "./wrangler.jsonc",
+  "name": "kanban-local",
+  "routes": [],
+  "vars": {
+    "DEPLOYMENT_ENV": "local",
+    "PUBLIC_ORIGIN": "http://127.0.0.1:8787",
+    "MONGO_DB": "kanban_container_dev"
+  }
+}

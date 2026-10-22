@@ -1,6 +1,6 @@
 # Authentication follow-up
 
-Updated October 21, 2026. Login throttling and origin/CSRF protection are implemented; production deployment and authenticated proxy/backend-origin protection remain pending. Existing JWT cookies, revocable token records, canonical username identity, and CRUD contracts are preserved.
+Updated October 21, 2026. Login throttling and origin/CSRF protection are implemented; Cloudflare Worker/container ingress protection is prepared, while remote deployment and production acceptance remain pending. Existing JWT cookies, revocable token records, canonical username identity, and CRUD contracts are preserved.
 
 The user explicitly separated login throttling and origin/CSRF protection from the [backend CRUD plan](06-backend-crud.md). These tasks are not part of CRUD delivery or its acceptance checks. Keep the existing JWT cookie authentication and revocable token records; this follow-up does not propose a different authentication system.
 
@@ -12,7 +12,8 @@ The user explicitly separated login throttling and origin/CSRF protection from t
 - [x] Both login screens explain throttling, retry time, and temporary unavailability; password fields clear after submission. No automatic retries or persistent credential storage.
 - [x] Shared frontend client uses same-origin mode and explains `403 csrf_rejected` in both login forms and board/logout flows. No replay, password retention, or draft loss on rejection.
 - [x] Documentation: [login throttling](../backend/README.md#login-throttling) and [Origin policy/settings and operational limitations](../backend/README.md#origin--csrf-protection).
-- [ ] Cloudflare Worker, authenticated backend-origin access, and production acceptance, tracked in [deployment](05-cloudflare-deployment.md).
+- [x] Prepare Cloudflare Worker/container routing and shared-secret backend ingress validation; see [deployment](05-cloudflare-deployment.md).
+- [ ] Deploy and verify authenticated ingress and existing login behavior in production.
 
 ## Implemented policy and limitations
 
@@ -22,7 +23,7 @@ Each bucket uses a single atomic MongoDB update, majority writes, and database t
 
 `429 login_throttled` uses the API error envelope and rounded-up `Retry-After` seconds for the rejecting window, without naming the key or revealing account existence. Another limit or subsequent traffic can still reject the next attempt. Database failure/timeout fails closed with generic `503 database_unavailable`; no password verification, tokens, cookie, or sensitive error details. There is no in-memory fallback.
 
-No client address or forwarding header is trusted or used as a key. The application-wide allowance covers direct traffic and the current local proxy, even if server middleware rewrites peer addresses. One attacker can temporarily exhaust shared/username allowances; existing sessions remain usable. Fixed-window boundary bursts and general HTTP/DDoS protection remain limitations. Before adding per-address limits, authenticate the future Worker, prevent direct origin bypass, overwrite caller-supplied address headers, and configure middleware trust accordingly. Preserve `429`/`Retry-After` and disable API caching. Proxy authentication remains pending; CSRF is enforced by the separate middleware below.
+No client address or forwarding header is trusted or used as a key. The application-wide allowance covers direct traffic and the current local proxy, even if server middleware rewrites peer addresses. One attacker can temporarily exhaust shared/username allowances; existing sessions remain usable. Fixed-window boundary bursts and general HTTP/DDoS protection remain limitations. Before adding per-address limits, authenticate the future Worker, prevent direct origin bypass, overwrite caller-supplied address headers, and configure middleware trust accordingly. Preserve `429`/`Retry-After` and disable API caching. Proxy authentication is now implemented for the Container path; CSRF is enforced independently by the middleware below.
 
 ## Origin / CSRF policy
 
@@ -34,7 +35,7 @@ Strict validation is sufficient for this application's same-origin fetch mutatio
 
 The shared client does not fabricate Origin. Both login forms use the explicit security-check message and clear passwords. Board/logout errors retain drafts and do not masquerade as comment ownership failures. Keep the tab open during operator correction of URL/proxy/configuration, then retry explicitly; there is no automatic replay, page reload or draft discard. Session restoration remains GET `/auth/me`. Non-browser clients, including the opt-in live harness's APIRequestContext calls, must send the configured Origin themselves.
 
-The future Worker must forward the browser Origin unchanged, including missing/null, and never substitute a trusted value. Preserve cookies, errors, statuses and Retry-After without caching. Authenticate the proxy and restrict direct backend access as separate deployment work. Neither those controls nor deployment are implemented here; no forwarding headers are newly trusted. No credential/body/cookie/database-URL logging is added.
+The prepared Worker rejects unsafe requests with missing/null/untrusted Origin before container startup, forwards accepted browser Origin unchanged, and never substitutes a trusted value. It preserves cookies, errors, statuses and Retry-After without caching. The private container binding and required production PROXY_SECRET check are implemented; deployment/live ingress acceptance remain pending. No forwarding headers are trusted. No credential/body/cookie/database-URL logging is added.
 
 ## Verification for this follow-up
 
@@ -47,3 +48,24 @@ Frontend: **12 API/state tests and all 17 isolated Chromium journeys passed**, n
 Earlier throttling verification (119 backend, 11 frontend unit/state, 14 browser tests) is superseded by this expanded suite. The live application browser harness was adjusted for explicit non-browser Origin headers but **not run**. No application accounts/data were provisioned/reset/altered, no Atlas application acceptance was attempted, and nothing was deployed. Authenticated proxy/backend-origin protection, production configuration/acceptance, and host restart/redeploy verification remain pending in [next steps](next-steps.md).
 
 The CRUD implementation still requires authentication for board/user data, author-only comment modifications, input validation, and conflict handling. Those existing requirements stay in the CRUD plan.
+
+
+## Container ingress follow-up
+
+Production now also requires `PROXY_SECRET`. Every request except exact GET liveness
+must have one matching `X-Kanban-Proxy-Secret` value; rejection is `403 proxy_forbidden`
+before Origin/routing/credentials/database work and never changes cookies or sessions.
+The Worker replaces this header and removes caller-supplied forwarding headers.
+Direct Astro development remains supported when no proxy secret is configured.
+The frontend never receives this secret. Existing username/password login stays;
+GitHub SSO was explored but is not selected. See the deployment guide for rotation,
+Docker/WSL verification and release prerequisites.
+
+
+## Container preparation verification (October 21, 2026)
+
+- **257 backend tests passed, none skipped**: 234 contract/unit and 23 integration tests using disposable local MongoDB databases. Ruff lint/format passed; the upstream Starlette/HTTPX warning remains.
+- **12 frontend API/state tests, 6 Worker tests and 17 isolated Chromium journeys passed**. Astro/TypeScript checks, production build and Wrangler deployment dry-run passed. Browser fixtures used built static preview, not a live API proxy.
+- The production Docker image passed auth, ingress/Origin rejection, throttling, CRUD, non-root/no-.env checks and restart persistence against a disposable Docker MongoDB replica set.
+- **Full local Worker-to-container acceptance did not pass**: native Windows Wrangler rejects container development; WSL reached image build but its `cloudflare/proxy-everything` networking sidecar exited with status 1 and readiness timed out. The exact cause remains undiagnosed. Environment: Docker Desktop 4.29.0 / engine 26.0.0, Wrangler 4.151.2. Check/update the local Docker/WSL environment and rerun `tests/worker_smoke.py` before considering local routing accepted. Test MongoDB containers/volumes and the stopped test sidecar were removed.
+- No application accounts/data, Atlas settings, remote secrets or deployments were changed. Production ingress, Atlas connectivity, sleep/wake, rollout persistence, backups and public-hostname acceptance remain pending.

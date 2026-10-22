@@ -1,5 +1,7 @@
 """Fail closed before routing, body parsing, authentication, or database access."""
 
+from secrets import compare_digest
+
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.errors import error_response
@@ -22,5 +24,28 @@ class OriginProtectionMiddleware:
                     headers={"Cache-Control": "no-store"},
                 )
                 await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+class ProxyAuthenticationMiddleware:
+    """Authenticate the ingress before any API work; only process liveness is public."""
+
+    def __init__(self, app: ASGIApp, secret: str):
+        self.app = app
+        self.secret = secret.encode("utf-8")
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "http" and not (
+            scope["method"] == "GET" and scope["path"] == "/api/health/live"
+        ):
+            values = [v for k, v in scope["headers"] if k.lower() == b"x-kanban-proxy-secret"]
+            if len(values) != 1 or not compare_digest(values[0], self.secret):
+                await error_response(
+                    403,
+                    "proxy_forbidden",
+                    "Request is not authorized",
+                    headers={"Cache-Control": "no-store"},
+                )(scope, receive, send)
                 return
         await self.app(scope, receive, send)

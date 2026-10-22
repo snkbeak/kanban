@@ -6,7 +6,7 @@ Start here: [Next steps](next-steps.md) records the completed baseline and the r
 
 Current backend contract: [Backend CRUD plan and implementation resolutions](06-backend-crud.md). Username identity and CRUD are implemented; 78 contract tests and 13 real Atlas integration tests pass. Its decisions supersede conflicting assumptions in earlier plans. Setup and payload examples are in [backend/README.md](../backend/README.md).
 
-Separate follow-up: [Authentication follow-up](07-auth-follow-up.md) records implemented MongoDB login throttling, strict Origin/CSRF protection and frontend recovery handling (October 21). Deployment and authenticated proxy/backend-origin protection remain pending outside CRUD scope.
+Separate follow-up: [Authentication follow-up](07-auth-follow-up.md) records implemented MongoDB login throttling, strict Origin/CSRF protection and frontend recovery handling (October 21). The Cloudflare Container/Worker and shared-secret ingress check are prepared; remote deployment and production acceptance remain pending.
 
 Supporting plans:
 
@@ -14,8 +14,8 @@ Supporting plans:
 2. [Backend and data](02-backend.md): FastAPI, MongoDB, accounts, and API contracts.
 3. [Frontend](03-frontend.md): Astro, TypeScript, and board interactions.
 4. [Delivery and verification](04-delivery.md): implementation milestones, checks, and operation.
-5. [Deployment](05-cloudflare-deployment.md): existing Cloudflare configuration, pending API proxy/backend hosting, Atlas setup, and recovery verification.
+5. [Deployment](05-cloudflare-deployment.md): prepared Cloudflare Worker/Container hosting, Atlas setup, and release/recovery verification.
 
-The target is one shared board, the existing Cloudflare static frontend configuration plus a pending API proxy Worker, a hosted FastAPI service, and Atlas. Atlas access has been verified; the Python host/tier remains unselected, with Render an option. Use periodic refreshes; three users do not require microservices, a queue, Redis, or WebSockets.
+The selected target is one shared board, Cloudflare Workers Static Assets/API Worker, FastAPI on Cloudflare Containers (Workers Paid), and MongoDB Atlas. The user enabled Workers Paid and has Docker Desktop. Deployment remains pending; the existing password/session system is retained. Use periodic refreshes; three users do not require microservices, a queue, Redis, or WebSockets.
 
 Cloudflare/Wrangler frontend deployment, the yellow label “At risk,” and author-only comment modification are confirmed requirements. Decisions marked as assumptions can be revisited during implementation. They are proposed defaults, not additional requirements from the rough draft.

@@ -28,7 +28,7 @@ uv run python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 Put the generated value into `.env` as `JWT_SECRET`. On Linux/macOS use `cp .env.example .env`. The example selects the explicit development database `kanban_dev`; the code's backward-compatible default is `kanban` if `MONGO_DB` is omitted.
 
-For Atlas, a complete credential-bearing `MONGODB_URI` is accepted as an alias for `MONGO_URL`; `MONGO_URL` takes precedence if both exist. Separate `MONGODB_USERNAME`/`MONGODB_PASSWORD` values are not needed when credentials are already in the URI. Settings representations hide the URI and JWT secret. The current repository ignores `uv.lock`; `uv sync` generates/resolves it locally.
+For Atlas, a complete credential-bearing `MONGODB_URI` is accepted as an alias for `MONGO_URL`; `MONGO_URL` takes precedence if both exist. Separate `MONGODB_USERNAME`/`MONGODB_PASSWORD` values are not needed when credentials are already in the URI. Settings representations hide the URI and JWT secret. The backend lockfile is committed; use `uv sync --locked` for repeatable installs. Container base images are pinned by digest.
 
 Create accounts, each prompting for an 8–256 character password, then start the API:
 
@@ -47,6 +47,7 @@ API: <http://127.0.0.1:8000/api>. Interactive OpenAPI: <http://127.0.0.1:8000/do
 | `MONGO_URL` | `mongodb://localhost:27017` | Replica-set URI or Atlas URI |
 | `MONGO_DB` | `kanban` | Explicit database name; example uses `kanban_dev` |
 | `COOKIE_SECURE` | `false` | Set true over HTTPS |
+| `PROXY_SECRET` | unset in development | Required in production; separate random secret of at least 32 characters, shared only with the Worker |
 | `APP_ENV` | `development` | Set `production` explicitly for deployment; requires secure cookies and explicit HTTPS origins |
 | `TRUSTED_ORIGINS` | `["http://localhost:4321","http://127.0.0.1:4321"]` | JSON array of exact serialized browser origins; see policy below |
 | `TOKEN_DAYS` | `7` | JWT/cookie lifetime in days |
@@ -69,7 +70,7 @@ Exhaustion returns `429` with the normal envelope, code `login_throttled`, and a
 
 Client-address policy: **no address is used as an authorization or throttling key**. Neither socket addresses nor `Forwarded`, `X-Forwarded-For`, `X-Real-IP`, or `CF-Connecting-IP` can select another allowance. All clients share the global bucket even if an ASGI server rewrites the peer address. This is safe for the current direct/local-proxy deployment and protects against distributed guessing, but one caller can exhaust a username or the shared allowance and temporarily deny legitimate logins. Existing sessions, `/me`, logout, and CRUD are unaffected. Fixed windows permit bursts around boundaries; this is not a general HTTP/DDoS or concurrent Argon2 resource limiter.
 
-The future Cloudflare Worker and backend-origin protection remain **pending**. Authenticate the proxy at the backend and prevent direct origin bypass before introducing any per-client-address policy. The Worker must overwrite caller-supplied forwarding headers with its authoritative address, and backend server/proxy middleware must trust only that authenticated path. Keep username/global protection if an additional address bucket is added. Preserve `429`, `Retry-After`, cookies, and error envelopes and disable API caching. Proxy authentication remains pending; the Origin policy below is enforced independently.
+The Cloudflare Worker and shared-secret backend ingress check are implemented; deployment and live verification remain **pending**. Authenticate the proxy at the backend and prevent direct origin bypass before introducing any per-client-address policy. The Worker must overwrite caller-supplied forwarding headers with its authoritative address, and backend server/proxy middleware must trust only that authenticated path. Keep username/global protection if an additional address bucket is added. Preserve `429`, `Retry-After`, cookies, and error envelopes and disable API caching. Proxy authentication is implemented as described below; the Origin policy is enforced independently.
 
 Use identical settings and the same application database on every backend process; separate test/preview databases. Window changes take effect on the next window for existing records; limit changes apply on the next attempt. Deploy configuration changes consistently. Startup creates the TTL index idempotently. Restarts do not reset counters; do not clear the collection as a routine recovery step. Monitor generic `429`/`503` counts without logging request bodies, passwords, JWTs, or credential-bearing database URLs.
 
@@ -91,11 +92,12 @@ Production must set:
 APP_ENV=production
 COOKIE_SECURE=true
 TRUSTED_ORIGINS=["https://kanban.sneakybeak.net"]
+PROXY_SECRET=<separate random secret of at least 32 characters>
 ```
 
 Production rejects HTTP and loopback origins and refuses implicit development defaults. Setting `COOKIE_SECURE=true` also requires explicit HTTPS origins even without production mode. Keep configuration identical across workers; restart them after changes. Each additional trusted origin authorizes that site's scripts to initiate requests and must be under the same operator's control. Do not add arbitrary preview hosts to the application allowlist. The environment cannot detect that an operator accidentally left development mode enabled; setting the production values is a release requirement.
 
-The future authenticated Cloudflare Worker must preserve the incoming browser Origin unchanged, including absence/`null`, and preserve cookies, error/status envelopes and `Retry-After`, with API caching disabled. It must never manufacture a trusted Origin for an untrusted or missing one. Authenticate that proxy separately and prevent backend-origin bypass before trusting forwarding headers. Neither the Worker nor proxy authentication/network restrictions are implemented here. Origin validation prevents browser CSRF, **not** direct callers forging headers, stolen-session use, XSS or compromise of a trusted frontend. Such callers still face authentication and existing login limits. Do not log bodies, cookies/JWTs, credentials, database URLs or raw rejected headers. If future clients cannot supply Origin, design an explicit alternative before admitting them; do not weaken the missing/null policy.
+The prepared Cloudflare Worker preserves the incoming browser Origin unchanged, including absence/`null`, and preserve cookies, error/status envelopes and `Retry-After`, with API caching disabled. It must never manufacture a trusted Origin for an untrusted or missing one. Authenticate that proxy separately and prevent backend-origin bypass before trusting forwarding headers. The Worker and backend shared-secret check are implemented for Containers; remote deployment and live ingress verification remain pending. Origin validation prevents browser CSRF, **not** direct callers forging headers, stolen-session use, XSS or compromise of a trusted frontend. Such callers still face authentication and existing login limits. Do not log bodies, cookies/JWTs, credentials, database URLs or raw rejected headers. If future clients cannot supply Origin, design an explicit alternative before admitting them; do not weaken the missing/null policy.
 
 The frontend shows a distinct security-check failure on both login forms and board/logout operations. Passwords clear, mutations are never replayed, and failed logout retains the session and unsaved drafts. Keep the tab open while the operator corrects URL/proxy/allowlist settings, then explicitly retry. Navigating/reloading still discards tab-memory drafts as before.
 
@@ -269,3 +271,48 @@ The frontend now connects these routes while preserving the existing Astro desig
 The column selector appends to another column and disables its current option. Drag-and-drop is the only UI control for within-column ordering and supplies the drop anchor. Disable reordering while filters hide cards; allow selector moves. Keep the complete board for local search/filter/count/display-pagination behavior.
 
 Login throttling, strict Origin/CSRF protection, and frontend recovery messaging are implemented in [the authentication follow-up](../.agent/07-auth-follow-up.md). Frontend wiring is covered by isolated browser fixtures; hosting and production application verification remain separate work.
+
+
+## Cloudflare Container hosting
+
+The selected host is Cloudflare Containers on Workers Paid; MongoDB remains Atlas.
+The existing login, cookie, session, throttling and CRUD contracts are retained.
+See the [deployment guide](../.agent/05-cloudflare-deployment.md) for secrets, Atlas
+network access, cost behavior, local checks, rollout and remaining release gates.
+No production deployment or account provisioning has been performed.
+
+`Dockerfile` builds Python 3.13 with the committed uv lockfile and pinned base-image
+digests, runs as UID 10001, and starts one Uvicorn process on port 8000. Its build
+context excludes all .env files and local data. Uvicorn disables forwarded-header
+trust and access logging; database startup failures are generic. Container disk
+is ephemeral: all persistence belongs to MongoDB.
+
+Production requires `PROXY_SECRET`. Before Origin/authentication/body/database
+work, middleware validates exactly one `X-Kanban-Proxy-Secret` header with a
+constant-time comparison. Failure returns `403 proxy_forbidden` without cookie or
+data changes. Only exact GET `/api/health/live` is exempt for process health.
+Readiness and documentation paths require the secret. The Worker replaces this
+header and removes caller-supplied forwarding headers; browser code never receives
+it. Development without a configured secret keeps the direct Astro proxy usable.
+A shared secret authenticates ingress, not a user; ordinary session checks remain.
+
+From `backend/`, Docker Desktop can run the production-image verification:
+
+```powershell
+.venv/Scripts/python.exe tests/container_smoke.py
+```
+
+It creates only a uniquely named Compose project with its own MongoDB replica set,
+verifies auth/CSRF/proxy/throttling/CRUD, restarts the API, verifies persistence,
+and removes only its test containers/volumes. It does not read .env or use Atlas.
+`tests/worker_smoke.py` additionally tests the real local Wrangler path; **run it
+under Linux/WSL**, because Wrangler does not support local Containers on Windows.
+It needs Linux Node, frontend dependencies, Docker access, PyMongo and argon2-cffi,
+built frontend assets and free port 8787. An optional `WRANGLER_CLI` points to an
+isolated Linux Wrangler installation. The script uses generated fixture credentials
+and a separate disposable database, never existing application accounts.
+
+October 21 preparation: 257 backend tests (none skipped), Ruff checks and the
+production Docker smoke/restart test passed. Full local Wrangler acceptance is
+blocked by a WSL networking-sidecar startup failure; deployment and Atlas
+acceptance remain pending. See the [verification record](../.agent/05-cloudflare-deployment.md#container-preparation-verification-october-21-2026).

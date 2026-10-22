@@ -1,15 +1,32 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "kanban-sneakybeak-net",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-10-19",
   "send_metrics": false,
   "workers_dev": false,
   "preview_urls": false,
   "assets": {
+    "binding": "ASSETS",
+    "run_worker_first": ["/api", "/api/*"],
     "directory": "./dist",
     "html_handling": "drop-trailing-slash",
     "not_found_handling": "404-page"
   },
+  "vars": {
+    "DEPLOYMENT_ENV": "production",
+    "PUBLIC_ORIGIN": "https://kanban.sneakybeak.net",
+    "MONGO_DB": "kanban_prod"
+  },
+  "containers": [{
+    "class_name": "KanbanAPI",
+    "image": "../backend/Dockerfile",
+    "image_build_context": "../backend",
+    "instance_type": "basic",
+    "max_instances": 1
+  }],
+  "durable_objects": { "bindings": [{ "name": "KANBAN_API", "class_name": "KanbanAPI" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KanbanAPI"] }],
   "routes": [
     { "pattern": "kanban.sneakybeak.net", "custom_domain": true }
   ]

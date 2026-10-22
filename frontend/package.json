@@ -8,20 +8,24 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "check": "astro check",
+    "check": "astro check && tsc -p worker/tsconfig.json",
     "test": "node --experimental-strip-types --test tests/state.test.ts tests/api.test.ts",
     "test:browser": "playwright test",
     "test:live": "node --env-file-if-exists=.env.live ./node_modules/@playwright/test/cli.js test --config=playwright.live.config.ts",
     "preview": "astro preview",
-    "preview:cloudflare": "npm run build && wrangler dev",
+    "test:worker": "node --experimental-strip-types --test tests/worker.test.ts",
+    "preview:cloudflare": "npm run build && wrangler dev --config wrangler.local.jsonc --ip 127.0.0.1 --port 8787",
+    "deploy:check": "npm run build && wrangler deploy --dry-run",
     "deploy": "npm run build && wrangler deploy",
     "astro": "astro"
   },
   "dependencies": {
+    "@cloudflare/containers": "^0.3.7",
     "astro": "^7.4.1"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.11",
+    "@cloudflare/workers-types": "^5.20261021.1",
     "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
     "typescript": "^6.0.3",

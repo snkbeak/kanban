@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     token_days: int = 7
     cookie_secure: bool = False  # set COOKIE_SECURE=true behind HTTPS
     app_env: Literal["development", "production"] = "development"
+    proxy_secret: str | None = Field(default=None, min_length=32, repr=False)
     trusted_origins: tuple[str, ...] = ("http://localhost:4321", "http://127.0.0.1:4321")
     login_username_limit: int = Field(default=5, ge=1, le=10000)
     login_username_window_seconds: int = Field(default=900, ge=1, le=86400)
@@ -31,6 +32,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_origins(self):
         production = self.app_env == "production"
+        if production and not self.proxy_secret:
+            raise ValueError("Production requires PROXY_SECRET")
         if production and not self.cookie_secure:
             raise ValueError("Production requires COOKIE_SECURE=true")
         if (production or self.cookie_secure) and "trusted_origins" not in self.model_fields_set:

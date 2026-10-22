@@ -1,96 +1,97 @@
-# Deployment plan
+# Cloudflare deployment plan
 
-Updated October 20, 2026 to match the finalized backend and existing frontend configuration. Follow [next-steps.md](next-steps.md) for remaining work and [backend/README.md](../backend/README.md) for executable API/setup details. This document plans deployment; editing it does not provision or publish services.
+Updated October 21, 2026. The user selected **Cloudflare Workers Paid + Cloudflare Containers**, with **MongoDB Atlas**, and confirmed Workers Paid is enabled and Docker Desktop is installed. Keep username/password authentication, Argon2id, HttpOnly cookies, revocable tokens, login limits and strict Origin checks. No GitHub SSO or backend rewrite is planned.
 
-## Current state and target
+## Prepared topology
 
-- Cloudflare Workers Static Assets configuration already exists for `kanban.sneakybeak.net`, Worker name `kanban-sneakybeak-net`. The root domain's existing site is separate. `workers.dev` and preview URLs are disabled; preserve these settings.
-- The API-connected frontend is built as static assets. A same-origin development proxy is implemented; the Cloudflare `/api` proxy and production backend connection remain to be implemented.
-- FastAPI CRUD and authentication are implemented and tested. Atlas connectivity and transactions were verified using disposable test databases; application data/accounts were not provisioned.
-- Atlas is the available database service. Select the application database, permissions, production network access, and backup policy.
-- The Python host/tier remains unselected. Render is an option from the earlier plan, not a confirmed deployment. Keep a conventional Python process unless a separate hosting evaluation justifies another runtime.
+Browser -> `kanban.sneakybeak.net` Worker -> private Container binding -> FastAPI -> Atlas. The Worker also serves Astro static assets. `frontend/wrangler.jsonc` preserves the Worker name, custom domain, HTML/404 behavior, disabled workers.dev and preview URLs. `/api` and `/api/*` always run the Worker first; API errors never fall through to HTML.
 
-Target request flow: browser -> Cloudflare static assets/API proxy -> FastAPI -> Atlas. MongoDB credentials belong only to the backend. The Worker forwards HTTP and contains no card or ordering business logic.
+`frontend/worker/index.ts` uses the supported `@cloudflare/containers` class/default scheduling policy and one named instance (`shared-board`). The initial instance is **basic: 1 GiB RAM, 1/4 vCPU**, with **max_instances=1** and **2 minutes idle sleep**. This gives more room for Argon2 than the 256 MiB lite tier. It is a starting configuration, not a production performance guarantee. Image rollout can temporarily interrupt this single instance. MongoDB holds every persistent application record; container disk is disposable.
 
-## 1. Backend environment and startup
+The Worker forwards each API call once, with a 20-second deadline covering startup and response body, inside the frontend's existing 25-second timeout. No write is replayed. Startup/transport failures and unexpected HTML/redirects become generic API error envelopes; slow requests return `504 gateway_timeout`. A timed-out write may have committed: refresh before any explicit retry. Cookies, statuses, JSON envelopes and Retry-After survive; all API responses use `Cache-Control: no-store`.
 
-Use Python 3.12+ with the dependencies in `backend/pyproject.toml`. There is currently no project Dockerfile or committed backend lockfile; `uv.lock` is ignored. Before release, choose a reproducible build mechanism rather than assuming either artifact exists.
+## Ingress and secret handling
 
-For a conventional Python service, use `backend/` as the working directory, install uv in the build environment, and run `uv sync --no-dev`. The current application is a factory:
+Production FastAPI requires a random `PROXY_SECRET` of at least 32 characters. The Worker replaces the incoming `X-Kanban-Proxy-Secret` header with its secret and forwards only selected browser headers. It does not forward arbitrary Host, forwarding, client-IP or upstream-destination headers. The backend compares exactly one secret header in constant time before routing, authentication, rate-limit reservations or database operations. Only exact GET `/api/health/live` bypasses this check for local container health; readiness and all other paths require it. This authenticates the Worker, not the user.
 
-```sh
-uv run --no-sync uvicorn app.main:create_app --factory --host 0.0.0.0 --port "$PORT" --workers 1
+The container is addressed through its Durable Object binding, not a configured public backend URL. There is no public container administration/restart route. Production alternate Worker URLs remain disabled. Validate the deployed ingress configuration before claiming live bypass protection. Uvicorn has proxy-header processing and access logging disabled. Database initialization failures are logged generically; no secrets, request bodies or JWTs should be logged.
+
+Accepted browser Origin is preserved unchanged. The Worker rejects unsafe requests without the exact public Origin before waking the container; FastAPI repeats its full check. Missing/null/duplicate/untrusted Origin cannot be repaired with Referer, Host or forwarding headers. GET restoration still needs no Origin. All existing user authentication and CRUD authorization remain in FastAPI.
+
+Worker secrets, supplied only at runtime:
+
+- `MONGO_URL`: Atlas connection URI with database credentials and TLS. Never put it in Wrangler vars or assets.
+- `JWT_SECRET`: random stable signing secret; preserve across restarts to preserve sessions.
+- `PROXY_SECRET`: a separate random secret for ingress authentication.
+
+Checked-in nonsecret vars are `DEPLOYMENT_ENV=production`, `PUBLIC_ORIGIN=https://kanban.sneakybeak.net`, and proposed `MONGO_DB=kanban_prod`. **Confirm that database name before deployment.** Runtime translation sets `APP_ENV=production`, `COOKIE_SECURE=true`, and an exact `TRUSTED_ORIGINS` array. Default token lifetime and login limits remain unchanged. Preview/local configurations must not use production credentials or data.
+
+## Reproducible container build
+
+`backend/Dockerfile` uses digest-pinned Python 3.13 slim and uv images, a committed `backend/uv.lock`, and `uv sync --locked --no-dev`. Dependencies are installed before app files for cache reuse. Run as UID/GID 10001, one Uvicorn worker on port 8000. `.dockerignore` allowlists only pyproject, lockfile and Python app sources: .env files, local MongoDB data, tests and development environments never enter the build context/image.
+
+Build from repository root:
+
+```powershell
+docker build --platform linux/amd64 -t kanban-api:local backend
 ```
 
-This is a POSIX hosting command; the service supplies `PORT`. For local PowerShell use the backend README's command. Render supports ordinary Python/FastAPI services; adapt its setup to this project's factory rather than copying a `main:app` example unchanged. [Render FastAPI documentation](https://render.com/docs/deploy-fastapi).
+Update the lockfile and image digests deliberately with verification. Do not rebuild against floating dependencies. The image never provisions or resets accounts. Startup initializes indexes/metadata idempotently and requires a transaction-capable database.
 
-| Current setting | Deployment use |
-| --- | --- |
-| `MONGO_URL` or `MONGODB_URI` | Complete Atlas connection URI; `MONGO_URL` wins if both are set |
-| `MONGO_DB` | Explicit application database name; do not rely on the default `kanban` |
-| `JWT_SECRET` | Random secret of at least 32 characters, stable across restarts |
-| `COOKIE_SECURE` | `true` for the HTTPS frontend |
-| `TOKEN_DAYS` | Optional, defaults to 7 |
+## Local checks before publishing
 
-Separate MongoDB username/password settings are unnecessary when the URI contains credentials. Do not expose configuration in frontend build variables, generated assets, logs, or committed files.
+Run the container smoke test from `backend/` using the existing virtual environment (or equivalent `uv run python`). Run the Worker smoke test in **Linux/WSL** with Linux Node dependencies and Docker integration; Wrangler rejects local Container development directly on Windows:
 
-Startup checks transaction-capable topology and legacy account shape, creates indexes, and initializes counters/column revisions idempotently. It closes the client on shutdown. Probe `/api/health/ready` for database readiness and `/api/health/live` for process liveness; runtime database failures yield generic 503 responses.
+```powershell
+.venv/Scripts/python.exe tests/container_smoke.py
+```
 
-Provision `chris`, `sean`, and `james` once with `uv run python -m app.create_user <username>`. Repeating this command resets the password and revokes tokens; never run it automatically on every deploy. The API has no signup or account editing endpoint.
+In Linux/WSL, with the required Python and Linux Node dependencies installed, run `python3 tests/worker_smoke.py` from `backend/`.
 
-Fresh databases need no migration. If old disposable development records exist, stop the app and identify the exact database before the documented reset. Never perform a deployment-wide cluster reset.
+The first builds the production image and runs real auth, proxy/CSRF, throttling and CRUD checks on an isolated Docker MongoDB replica set, then restarts the API and verifies sessions, allowances and content survive. The second uses local Wrangler, the actual container, built static assets, generated fixture credentials and a separate disposable MongoDB replica set. Both use uniquely named Compose projects and remove only their own containers/volumes. Neither reads application .env files or contacts Atlas. The Worker check requires frontend `npm run build` first and free port 8787. Test logs/config live under ignored `.wrangler/`.
 
-## 2. Cloudflare assets and API proxy
+From `frontend/`:
 
-Extend the existing `frontend/wrangler.jsonc` and scripts. Preserve its custom domain, static HTML handling, 404 behavior, Worker name, and disabled alternate URLs.
+```powershell
+npm test
+npm run test:worker
+npm run check
+npm run deploy:check
+```
 
-Add a Worker entry point such as `frontend/worker/index.ts`, `main`, an `ASSETS` binding, and a configured backend `API_ORIGIN`. Route `/api` and `/api/*` through the Worker first; serve other requests through the assets binding. Cloudflare supports this selective routing via `assets.run_worker_first`. [Worker/static-asset routing documentation](https://developers.cloudflare.com/workers/static-assets/routing/worker-script/).
+`deploy:check` builds the frontend, bundles the Worker and builds the container image with `wrangler deploy --dry-run`; it does not publish. Isolated browser fixtures can still run against Astro static preview. The existing Astro dev-server route-loading issue is separate maintenance.
 
-Proxy requirements:
+For manual container development, copy `.dev.vars.example` to ignored `.dev.vars`, supply only development secrets and a deliberately selected development replica-set URL, then run `npm run preview:cloudflare`. Run this command in Linux/WSL. It uses `wrangler.local.jsonc`, `http://127.0.0.1:8787`, insecure local cookies, and `kanban_container_dev`. It does not seed users. Do not use the production Wrangler configuration with local secrets. Static `npm run preview` still has no API proxy.
 
-- Use only the configured backend origin; preserve the `/api` path, query string, method, request body, cookie, content type, and relevant browser headers.
-- Preserve upstream status, JSON response bodies, and all Set-Cookie headers. Handle 204 responses without trying to parse JSON. API failures must not fall through to the static HTML page.
-- Preserve the host-only HttpOnly, SameSite=Lax cookie with Path=/; production responses use Secure. Do not set a backend-domain cookie.
-- Disable caching for every API response, including authentication and errors.
-- Bound upstream request time and report gateway failures clearly. Account for the backend's transaction deadline; on an uncertain write, let the client refresh instead of automatically retrying it.
-- Do not follow upstream redirects with credentials or accept client-supplied upstream destinations.
-- Keep preview environments separate or their API disabled. Do not reuse production accounts/secrets for arbitrary previews.
+## Atlas and release prerequisites
 
-Validate locally before publishing using existing `npm run build` and `npm run preview:cloudflare` commands from `frontend/`. Once deployment is explicitly requested, `npm run deploy` builds and publishes the assets/proxy.
+No Atlas configuration, secrets upload, application account provisioning or deployment has been performed by this preparation.
 
-## 3. Backend-origin access and deferred authentication
+1. Confirm the intended Cloudflare account and `kanban_prod` (or choose another explicit database name).
+2. Select a least-privilege Atlas database user for that database. Runtime needs transactions, indexes and application CRUD; it does not need permission to drop databases.
+3. Resolve Atlas network access for Cloudflare Container egress. Do not assume the container has a fixed outbound IP, or that Cloudflare's published reverse-proxy IP ranges are its egress addresses. Confirm a supported network policy for the actual Atlas tier. No allowlist is broadened automatically.
+4. After explicit authorization, set Worker secrets using `npx wrangler secret put MONGO_URL`, `JWT_SECRET`, and `PROXY_SECRET` from `frontend/`. Enter secrets interactively or through secure local input, never chat, source control, build arguments or command-line literals. Secret operations change remote configuration and are not part of the dry-run.
+5. Deliberately provision the intended production accounts once using the existing operator command with the production environment selected. Repeating `app.create_user` resets a password and revokes sessions. Do not seed at startup or reuse test accounts.
+6. Deploy only when requested using `npm run deploy`. First provisioning may take minutes. Verify readiness, all three login/me/logout flows, secure cookies, Origin rejection, ingress rejection, throttling/Retry-After, card/comment CRUD, conflicts and ordering through the public hostname.
+7. Verify persistence after an actual container sleep/wake and deployment. Local restart tests are not production acceptance.
 
-A Worker-to-backend shared secret and rejection of direct-origin application traffic were earlier deployment proposals. Neither a `PROXY_SECRET` setting nor header validation currently exists in FastAPI. Decide the origin-access mechanism during deployment and implement/test both ends before claiming direct-origin protection. A proxy secret authenticates the proxy, not the signed-in user.
+## Costs and operations
 
-Do not trust forwarded client-IP headers until the proxy path authenticates and replaces them. This matters when the separate throttling implementation selects its client keys.
+Workers Paid's $5 monthly subscription is a base, not a spending cap. Container memory/disk usage accrues while awake; CPU and other platform usage are also billed. Two-minute idle sleep limits idle time only: a visible signed-in board polls every 15 seconds and keeps the instance awake; API probes/scanners can also wake it. Static assets do not require the API container. Do not schedule frequent readiness probes if idle sleep is desired. Configure billing alerts and inspect usage after launch. No billing settings were changed here.
 
-Login throttling and origin/CSRF protection remain in [07-auth-follow-up.md](07-auth-follow-up.md). The current backend has no allowed-origin setting or CSRF token/header contract; adding environment variables alone cannot enable them. Coordinate proxy/header handling with that follow-up when defined. These pending controls do not change the completed CRUD verification results.
+For restart/redeploy, preserve the database and JWT secret. For `PROXY_SECRET` rotation, update the Worker secret and roll/restart the container so both ends receive the same value; a mixed rollout may temporarily reject requests, so use a maintenance window. JWT rotation intentionally invalidates all sessions. Password rotation uses the existing operator command and revokes that user's records.
 
-## 4. Atlas and persistence
+Rollback must restore a compatible Worker **and** container image/configuration, preserving Atlas data. Keep the previous source commit/image identity; do not assume rolling back only the Worker also rolls back the container. No destructive database rollback is automated.
 
-Use the existing Atlas service; verify the chosen application database and tier rather than creating another cluster by default. Provide the backend with appropriate database permissions and permit its outbound network access. Keep test credentials/access separate where practical; integration tests need permission to create/drop generated test databases, which is not an application runtime requirement.
+Back up `users`, `tokens`, `login_limits`, `cards`, `counters`, and `column_orders` consistently. Choose backup/retention for the actual Atlas tier and test restoration into an isolated database. Revoke restored sessions or rotate JWT secrets before exposing a restore. Production backups, restore acceptance, CI, mobile/keyboard acceptance and operational runbook exercises remain pending.
 
-Transactions are mandatory: a local alternative must be a replica set, even if it has only one node. Standalone MongoDB is unsupported. Card/order writes commit together; do not replace this with process-local locks or independent writes.
+References: [Containers getting started](https://developers.cloudflare.com/containers/get-started/), [Container class](https://developers.cloudflare.com/containers/api/container-class/), [pricing](https://developers.cloudflare.com/containers/platform/pricing/), [outbound traffic](https://developers.cloudflare.com/containers/configuration/outbound-traffic/), [Atlas backup/restore](https://www.mongodb.com/docs/atlas/backup-restore-cluster/).
 
-Persist and restore all application collections together: `users`, `tokens`, `cards`, `counters`, and `column_orders`. Username is the account primary key; there is no generated account ID to migrate. Cards embed comments and carry independent content/discussion versions. Ticket counters and ordering revisions are application data, not disposable caches.
 
-Test readiness, a create/read/move/comment cycle, and ordering persistence across backend restart/redeploy. Separate application verification from the previously completed disposable integration tests.
+## Container preparation verification (October 21, 2026)
 
-## 5. Backups, recovery, and release checks
-
-Select and document backup frequency, retention, and recovery expectations for the actual Atlas tier. The earlier target of daily backups with seven daily and four weekly retention remains a planning target, not a provisioned guarantee. Check available mechanisms; if using logical dumps, quiesce application writes so cards, counters, and column orders form a consistent backup. Atlas backup availability and restore behavior depend on the cluster type/tier. [Atlas backup and restore documentation](https://www.mongodb.com/docs/atlas/backup-restore-cluster/).
-
-Restore into an isolated database and verify username identities, cards/comments, positions, revisions, and subsequent ticket allocation. A backup can restore old token records; rotate the JWT secret or revoke restored tokens before exposing a recovered environment. Document possible data loss since the backup and the supported rollback procedure.
-
-Release checks:
-
-- All three provisioned accounts can log in, restore a session, and log out through the public Cloudflare hostname.
-- The full board loads without server filters/pagination; card/comment CRUD, selector moves, and drag-and-drop ordering persist.
-- Stale content/comment/order preconditions still return 409 through the proxy; comment activity does not invalidate a current content save.
-- Comment ownership, the 20-comment cap, Blocked health rules, and guarded whole-card deletion behave consistently in the browser.
-- Cookies and JSON/status responses survive the proxy; API responses are not cached.
-- Backend-origin access controls are tested once implemented, and authentication-follow-up status is reported separately.
-- Application data survives redeployment; an isolated restore succeeds.
-- CI runs backend and browser checks with isolated data; credentials stay out of assets and logs.
-
-Hosting references were checked October 20, 2026. Provider pricing, tier selection, and provisioning remain separate decisions.
+- **257 backend tests passed, none skipped**: 234 contract/unit and 23 integration tests using disposable local MongoDB databases. Ruff lint/format passed; the upstream Starlette/HTTPX warning remains.
+- **12 frontend API/state tests, 6 Worker tests and 17 isolated Chromium journeys passed**. Astro/TypeScript checks, production build and Wrangler deployment dry-run passed. Browser fixtures used built static preview, not a live API proxy.
+- The production Docker image passed auth, ingress/Origin rejection, throttling, CRUD, non-root/no-.env checks and restart persistence against a disposable Docker MongoDB replica set.
+- **Full local Worker-to-container acceptance did not pass**: native Windows Wrangler rejects container development; WSL reached image build but its `cloudflare/proxy-everything` networking sidecar exited with status 1 and readiness timed out. The exact cause remains undiagnosed. Environment: Docker Desktop 4.29.0 / engine 26.0.0, Wrangler 4.151.2. Check/update the local Docker/WSL environment and rerun `tests/worker_smoke.py` before considering local routing accepted. Test MongoDB containers/volumes and the stopped test sidecar were removed.
+- No application accounts/data, Atlas settings, remote secrets or deployments were changed. Production ingress, Atlas connectivity, sleep/wake, rollout persistence, backups and public-hostname acceptance remain pending.

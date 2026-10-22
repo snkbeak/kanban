@@ -72,11 +72,11 @@ Done when two browser sessions see each other's updates without losing drafts or
 
 Follow [05-cloudflare-deployment.md](05-cloudflare-deployment.md).
 
-- [ ] Choose the Python backend host/tier. Render remains an option, not a confirmed deployment.
+- [x] Select Cloudflare Containers on Workers Paid with MongoDB Atlas, retaining FastAPI and existing password/session authentication. The user enabled Workers Paid and confirmed Docker Desktop. Initial configuration: one basic instance with two-minute idle sleep; not a spending cap.
 - [ ] Configure the backend's application secrets, explicit database, `APP_ENV=production`, `COOKIE_SECURE=true`, exact HTTPS `TRUSTED_ORIGINS`, Atlas access, and readiness probe.
-- [ ] Add the Cloudflare Worker `/api` proxy alongside the existing static assets and preserve the configured `kanban.sneakybeak.net` hostname.
+- [x] Prepare the Cloudflare Worker `/api` proxy and container binding alongside existing static assets, preserving `kanban.sneakybeak.net` and disabled alternate URLs. Deployment remains pending.
 - [ ] Verify unchanged browser Origin forwarding (never synthesize trusted Origin), cookie forwarding, API error/status/Retry-After preservation, disabled API caching, and bounded proxy timeouts.
-- [ ] Decide and implement backend-origin access controls as deployment work; proxy-secret validation does not exist in the current backend.
+- [x] Implement Worker-to-container `PROXY_SECRET` authentication and backend rejection before API work. The Worker replaces caller-supplied proxy headers; only process liveness bypasses the backend check. Verify actual deployed ingress/bypass behavior before marking production protection accepted.
 - [ ] Keep preview/test data and accounts separate from application data.
 - [ ] Deploy and verify the full browser flow through the public hostname.
 
@@ -88,7 +88,7 @@ Done when the public frontend uses the hosted backend and Atlas, with persistent
 - [x] Exercise multiple users, conflicting edits/moves, independent discussion updates, comment ownership, the 20-comment limit, and guarded whole-card deletion against local FastAPI/MongoDB. Repeat for production release acceptance.
 - [ ] Check mobile layout, keyboard operation, focus behavior, status labels, long text, and empty/error states. Keep the selector available for column movement without a pointer; do not add a separate within-column ordering control.
 - [ ] Add CI for backend lint/format/tests, TypeScript/Astro checks, frontend build, and core browser tests. CI must explicitly configure disposable MongoDB so integration tests do not silently skip.
-- [ ] Decide how to make release dependency resolution reproducible; the current repository ignores `uv.lock`. Do not assume a committed backend lockfile or Dockerfile exists.
+- [x] Add a digest-pinned non-root Dockerfile and committed backend uv lockfile; build using `uv sync --locked --no-dev`, excluding secrets/local data from the image.
 - [ ] Configure a backup policy appropriate to the selected Atlas tier and perform an isolated restore, including cards, comments, username accounts, counters, and ordering metadata.
 - [ ] Document start/redeploy, password rotation, secret rotation, recovery, and rollback.
 - [ ] Resolve the upstream Starlette TestClient/HTTPX deprecation warning during test dependency maintenance; it did not prevent the verified tests from passing.
@@ -104,4 +104,26 @@ Done when the multi-user browser workflow, deployment persistence, and backup re
 - [x] Implement strict Origin/CSRF protection and its frontend contract, tracked in [07-auth-follow-up.md](07-auth-follow-up.md). All unsafe methods require one exact configured Origin; missing/null/malformed/duplicate values fail with `403 csrf_rejected` before any allowance, credential, session or data change. No Referer fallback or CSRF tokens. Frontend failures preserve drafts/sessions and require explicit retry.
 - [x] Verify Origin/CSRF: **215 backend tests passed, none skipped** (192 contract/unit + 23 real disposable local MongoDB integration tests), with Ruff lint/format checks passing. Database snapshots establish no changes on rejection; existing auth/throttling/CRUD pass. Upstream Starlette/HTTPX warning remains.
 - [x] Verify frontend Origin recovery: **12 API/state tests and all 17 isolated Chromium journeys passed**, plus Astro/TypeScript checks and production build. The initial browser run passed 16/17; the remaining success-message expectation was corrected and passed in a focused rerun. Approved reruns resolved Node/Playwright sandbox worker `EPERM`. Fixtures used built static preview on port 4321 and assert browser Origin on every mutation. No live API proxy or production acceptance is claimed. The live harness now supplies explicit Origin on non-browser requests but was not run; application accounts/data were not touched.
-- [ ] Complete authenticated Cloudflare proxy/backend-origin protection and production acceptance. Shared limits work now; one attacker can temporarily deny new logins. Only add address-specific trust after authenticating the proxy and preventing origin bypass. Preserve `429`, `Retry-After`, cookies, and API error envelopes without caching.
+- [ ] Deploy and accept the implemented authenticated Cloudflare Worker/container ingress controls in production. Shared limits work now; one attacker can temporarily deny new logins. Only add address-specific trust after authenticating the proxy and preventing origin bypass. Preserve `429`, `Retry-After`, cookies, and API error envelopes without caching.
+
+
+## Cloudflare Container preparation (October 21)
+
+The deployment design is now [Cloudflare Workers Paid + Containers + Atlas](05-cloudflare-deployment.md), retaining existing login/authentication. Worker code, container packaging, runtime secrets, ingress validation, local configuration and disposable verification harnesses are prepared. No deployment, Atlas network changes, remote secret writes or application provisioning were performed.
+
+- [ ] Confirm the production Cloudflare account and proposed `MONGO_DB=kanban_prod`.
+- [ ] Configure appropriate Atlas credentials and network access for Container egress; do not assume a static IP or broaden the allowlist automatically.
+- [ ] Set production `MONGO_URL`, `JWT_SECRET`, and `PROXY_SECRET` Worker secrets after authorization; then deploy and deliberately provision production accounts.
+- [ ] Verify live public-hostname behavior, idle sleep/wake, container rollout/restart persistence and billing alerts. Visible board polling keeps the container awake.
+- [ ] Repeat production backup/restore, collaboration and usability acceptance.
+
+Local Wrangler container development requires **Linux/WSL**; Windows Docker builds and production dry-runs work. The isolated container harness tests the actual FastAPI image with a disposable MongoDB replica set. The separate Worker harness tests the real local routing path and refuses to run directly on Windows. Neither uses application .env credentials or Atlas.
+
+
+## Container preparation verification (October 21, 2026)
+
+- **257 backend tests passed, none skipped**: 234 contract/unit and 23 integration tests using disposable local MongoDB databases. Ruff lint/format passed; the upstream Starlette/HTTPX warning remains.
+- **12 frontend API/state tests, 6 Worker tests and 17 isolated Chromium journeys passed**. Astro/TypeScript checks, production build and Wrangler deployment dry-run passed. Browser fixtures used built static preview, not a live API proxy.
+- The production Docker image passed auth, ingress/Origin rejection, throttling, CRUD, non-root/no-.env checks and restart persistence against a disposable Docker MongoDB replica set.
+- **Full local Worker-to-container acceptance did not pass**: native Windows Wrangler rejects container development; WSL reached image build but its `cloudflare/proxy-everything` networking sidecar exited with status 1 and readiness timed out. The exact cause remains undiagnosed. Environment: Docker Desktop 4.29.0 / engine 26.0.0, Wrangler 4.151.2. Check/update the local Docker/WSL environment and rerun `tests/worker_smoke.py` before considering local routing accepted. Test MongoDB containers/volumes and the stopped test sidecar were removed.
+- No application accounts/data, Atlas settings, remote secrets or deployments were changed. Production ingress, Atlas connectivity, sleep/wake, rollout persistence, backups and public-hostname acceptance remain pending.

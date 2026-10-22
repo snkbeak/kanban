@@ -1,0 +1,5 @@
+# Copy to .dev.vars only for local container development. Never use production secrets here.
+# Choose a disposable/development database; this does not create application accounts.
+MONGO_URL=mongodb://host.docker.internal:27017/?replicaSet=rs0&directConnection=true
+JWT_SECRET=replace-with-a-random-local-secret-at-least-32-characters
+PROXY_SECRET=replace-with-a-different-random-local-secret-at-least-32-characters

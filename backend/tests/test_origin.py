@@ -222,13 +222,14 @@ def test_production_configuration_and_exact_allowlist(monkeypatch):
         {"app_env": "production", "cookie_secure": True, "trusted_origins": ("https://[::1]",)},
     ]:
         with pytest.raises(ValidationError):
-            settings(**values)
+            settings(proxy_secret="test-proxy-secret-" * 3, **values)
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("COOKIE_SECURE", "true")
+    monkeypatch.setenv("PROXY_SECRET", "test-proxy-secret-" * 3)
     monkeypatch.setenv("TRUSTED_ORIGINS", '["https://board.example","https://board.example:8443"]')
     app = create_app(settings())
     app.state.db = AsyncMock()
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-Kanban-Proxy-Secret": "test-proxy-secret-" * 3})
     for origin in ["https://board.example", "https://board.example:8443"]:
         assert client.post("/api/auth/logout", headers={"Origin": origin}).status_code == 204
     for origin in [
