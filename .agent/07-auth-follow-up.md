@@ -1,5 +1,7 @@
 # Authentication follow-up
 
+October 21 persistence update: [D1 migration](08-d1-migration.md#authentication-throttling-and-account-tools) is planned. Preserve every security contract here, replacing Mongo token storage/atomic allowance reservations/TTL cleanup with tested D1 equivalents. Keep Argon2id and JWT/ingress secrets; D1 planning does not authorize password resets, account creation or remote deployment.
+
 Updated October 21, 2026. Login throttling and origin/CSRF protection are implemented; Cloudflare Worker/container ingress protection is prepared, while remote deployment and production acceptance remain pending. Existing JWT cookies, revocable token records, canonical username identity, and CRUD contracts are preserved.
 
 The user explicitly separated login throttling and origin/CSRF protection from the [backend CRUD plan](06-backend-crud.md). These tasks are not part of CRUD delivery or its acceptance checks. Keep the existing JWT cookie authentication and revocable token records; this follow-up does not propose a different authentication system.

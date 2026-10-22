@@ -1,5 +1,7 @@
 # Kanban frontend
 
+**Planned persistence change:** follow the [D1 migration plan](../.agent/08-d1-migration.md) before deployment. Existing Worker/config commands still describe the Mongo backend; no D1 binding or adapter has been implemented. Preserve Astro/UI/API behavior while replacing backend persistence. Atlas secret-upload instructions below are historical/current-code reference, not the active release sequence.
+
 Astro frontend configured for Cloudflare Workers Static Assets at
 `https://kanban.sneakybeak.net`, deployed with Wrangler. The Worker name is
 `kanban-sneakybeak-net`. Only the subdomain is configured; the root domain's

@@ -1,5 +1,7 @@
 # Backend and data
 
+October 21 direction: [migrate persistence to D1](08-d1-migration.md) while retaining FastAPI, Argon2id and the public API. This file describes the current Mongo implementation; D1 repositories, migrations, SQL atomicity and private adapter are planned, not implemented. Production usernames are `sea`, `poopfart`, `sneaky`; historical local account examples below do not authorize production seeding.
+
 Updated October 20, 2026 to reflect implementation. Confirmed decisions in [06-backend-crud.md](06-backend-crud.md) supersede the original backend proposals. Setup, payload examples, finalized contracts, and verification commands are in [backend/README.md](../backend/README.md).
 
 ## Structure and identity

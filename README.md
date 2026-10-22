@@ -1,9 +1,9 @@
 # kanban
-custom kanban board built using fastapi + mongo for backend and astro + typescript for frontend
+Custom kanban board built using FastAPI + MongoDB and Astro + TypeScript. A [migration to Cloudflare D1](.agent/08-d1-migration.md) is now planned; executable code still uses MongoDB.
 
-Backend setup, CRUD contracts, and tests: [backend/README.md](backend/README.md). The API requires a MongoDB replica set (one local node is sufficient). The frontend connects authentication, card/comment CRUD, and manual ordering through same-origin `/api`; see [frontend setup and checks](frontend/README.md). Local `kanban_dev` accounts and two live browser journeys are verified. Atlas application acceptance and the production API proxy/deployment remain pending in [next steps](.agent/next-steps.md).
+Backend setup, CRUD contracts, and tests: [backend/README.md](backend/README.md). Current code requires a MongoDB replica set; the proposed D1 migration retains FastAPI and uses a private Worker adapter. The frontend connects authentication, card/comment CRUD, and manual ordering through same-origin `/api`; see [frontend setup and checks](frontend/README.md). Local Mongo accounts and two live browser journeys are historically verified. D1 implementation, verification and production deployment remain pending in [next steps](.agent/next-steps.md).
 
-Login throttling is implemented with configurable MongoDB limits and frontend retry guidance; see [the policy](backend/README.md#login-throttling). Origin/CSRF protection and authenticated production proxy/backend-origin access remain pending.
+Login throttling is implemented with configurable MongoDB limits and frontend retry guidance; see [the policy](backend/README.md#login-throttling). Origin/CSRF protection and authenticated Worker/container ingress are implemented; their hosted acceptance remains pending. The D1 migration must preserve these contracts and target no additional D1 charges within the existing Workers Paid allowance.
 
 # sections:
 1. review/brainstorm: 

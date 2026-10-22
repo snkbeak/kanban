@@ -1,5 +1,7 @@
 # Frontend integration plan
 
+October 21 update: the [D1 migration](08-d1-migration.md) targets the existing FastAPI/browser contract. No frontend redesign or automatic retry behavior is proposed. Re-run applicable API/conflict/recovery journeys against the migrated backend; Mongo-era fixtures alone do not prove D1 persistence.
+
 Updated October 20, 2026 to match the implemented backend. [06-backend-crud.md](06-backend-crud.md) and [backend/README.md](../backend/README.md) supersede older frontend assumptions. Track execution in [next-steps.md](next-steps.md).
 
 ## Starting point and structure

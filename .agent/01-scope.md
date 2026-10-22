@@ -1,5 +1,7 @@
 # Scope and decisions
 
+October 21 update: the user requested a [D1 migration plan](08-d1-migration.md), superseding the original MongoDB persistence choice below. Retain FastAPI, Astro/TypeScript and existing authentication/CRUD behavior. Hosted usernames are `sea`, `poopfart`, `sneaky`; historical people/local-account references are not production provisioning instructions.
+
 ## Required outcome
 
 Chris, Sean, and James can sign in, manage a shared Kanban board, assign work to each other, and discuss tickets. Preserve the stack from the rough draft: FastAPI and MongoDB for the backend; Astro and TypeScript for the frontend.

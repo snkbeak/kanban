@@ -1,5 +1,7 @@
 # Delivery and verification plan
 
+October 21 update: the [D1 migration milestones](08-d1-migration.md#ordered-implementation-milestones) supersede Mongo/Atlas setup and deployment work in the historical roadmap below. Preserve the API/authentication contract; add real D1 transaction/concurrency tests, private adapter verification, measured usage, authorized hosted acceptance and D1 recovery. Historical passing Mongo tests are not D1 acceptance. Follow [next steps](next-steps.md) for the active checklist.
+
 Updated October 20, 2026. Use [next-steps.md](next-steps.md) as the active execution checklist. [06-backend-crud.md](06-backend-crud.md) and [backend/README.md](../backend/README.md) define the implemented backend; this roadmap no longer assumes backend pagination, shared card/comment versions, optional ordering, or automatic account seeding.
 
 ## Completed backend milestone

@@ -1,6 +1,8 @@
 # Cloudflare deployment plan
 
-Updated October 21, 2026. The user selected **Cloudflare Workers Paid + Cloudflare Containers**, with **MongoDB Atlas**, and confirmed Workers Paid is enabled and Docker Desktop is installed. Keep username/password authentication, Argon2id, HttpOnly cookies, revocable tokens, login limits and strict Origin checks. No GitHub SSO or backend rewrite is planned.
+Updated October 21, 2026. **Active proposed database: Cloudflare D1.** Follow the [D1 migration plan](08-d1-migration.md) before deployment. It retains FastAPI in Cloudflare Containers and proposes a private outbound Worker adapter for D1. Current code still uses MongoDB; nothing has been migrated/deployed. The Atlas prerequisites, network alternatives and commands below are historical/current-code reference and must not be executed as the active release plan.
+
+Workers Paid and Docker Desktop remain available. Preserve password authentication, Argon2id, HttpOnly cookies, revocable sessions, throttling and strict Origin checks. The D1 plan includes schema/atomicity work, cost measurement, authorized resource creation and bounded hosted acceptance. There is no automatic approval for implementation, secrets, remote resources or data writes.
 
 ## Active path: deploy and verify on Cloudflare
 
@@ -8,9 +10,11 @@ The user chose to defer local WSL/sidecar repair and proceed toward hosted deplo
 
 Docker remains necessary for this project's image build/push workflow, which already works from Windows PowerShell. The failing networking sidecar belongs to local `wrangler dev`; it is not needed to build and upload the image. Cloudflare runs the deployed container on its own infrastructure. See the [deployment workflow](https://developers.cloudflare.com/containers/get-started/).
 
-Next: confirm the account/database, resolve Atlas credentials and network access, configure runtime secrets and intended accounts, then deploy and verify the public hostname using the release steps below. Budget for hosted testing and possible deployment/debugging iterations. Existing passing tests and the dry-run support proceeding, but do not establish hosted acceptance. No WSL/Docker upgrade, restart, or local sidecar repair is required for this chosen path. This documentation update does not itself deploy or change remote configuration/data.
+Next: prove the D1 adapter and atomic SQL operations described in [08-d1-migration.md](08-d1-migration.md), then implement and verify the migration before preparing remote approval. Existing Mongo tests and dry-runs are historical evidence, not D1 acceptance. No WSL/Docker upgrade, restart or local sidecar repair is required. This documentation update does not itself deploy or change remote configuration/data.
 
 ## Prepared topology
+
+This section describes the current Mongo implementation. The proposed D1 topology is in [the migration plan](08-d1-migration.md#proposed-architecture).
 
 Browser -> `kanban.sneakybeak.net` Worker -> private Container binding -> FastAPI -> Atlas. The Worker also serves Astro static assets. `frontend/wrangler.jsonc` preserves the Worker name, custom domain, HTML/404 behavior, disabled workers.dev and preview URLs. `/api` and `/api/*` always run the Worker first; API errors never fall through to HTML.
 
@@ -73,11 +77,15 @@ For manual container development, copy `.dev.vars.example` to ignored `.dev.vars
 
 ## Atlas and release prerequisites
 
+**Superseded for the active D1 path.** Retained to explain the earlier preparation; do not create Atlas access entries, gateways or credentials for this migration.
+
 These are the active next steps. No Atlas configuration, secrets upload, application account provisioning or deployment has been performed by this preparation.
 
 The coordinated plan below supersedes the earlier preparation reports. Targets are confirmed; remote mutation authorization, Atlas access/credentials and hosted acceptance remain pending. First deployment will supply secrets with the application, and account creation will use the insert-only operator path.
 
 ## Coordinated release plan (October 21, 2026)
+
+Historical Mongo release proposal, superseded by [D1 migration and release](08-d1-migration.md). Confirmed Cloudflare identity/hostname and intended usernames still apply. Atlas network/secret/provisioning instructions do not.
 
 ### Confirmed targets and preflight evidence
 

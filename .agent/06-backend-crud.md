@@ -1,5 +1,7 @@
 # Remaining backend CRUD API plan
 
+October 21 update: the public API and concurrency resolutions here remain authoritative during the [planned D1 migration](08-d1-migration.md). MongoDB-specific storage/transaction implementation details are to be replaced, not API semantics. D1 implementation and verification are pending.
+
 Status: backend implementation and verification completed October 20, 2026: 78 contract tests and 13 real Atlas integration tests passed, along with lint/format checks. Only generated test databases were created/dropped; no application database was reset. The user initially deferred local MongoDB setup, then supplied working Atlas credentials locally.
 
 This is the authoritative scope document for the API. Confirmed decisions supersede conflicting assumptions in earlier plans. The resolutions below finalize the historical proposals retained later in this document. See [backend/README.md](../backend/README.md) for the executable contract and setup.

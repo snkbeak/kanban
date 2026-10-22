@@ -1,5 +1,7 @@
 # Kanban API
 
+**Planned migration:** [MongoDB to Cloudflare D1](../.agent/08-d1-migration.md), retaining FastAPI and existing authentication/API behavior. The code and setup commands below still use MongoDB. Do not execute the Atlas release/provisioning instructions as the new deployment path; D1 implementation and its operator tools are pending. The plan describes the private adapter, SQL transactions, cost constraints and acceptance checks.
+
 FastAPI and PyMongo Async implement a shared board with cookie authentication, card and comment CRUD, manual ordering, and read-only accounts. Run commands from `backend/`.
 
 ## Setup
