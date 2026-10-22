@@ -6,6 +6,8 @@ Start here: [Next steps](next-steps.md) records the completed baseline and the r
 
 Current backend contract: [Backend CRUD plan and implementation resolutions](06-backend-crud.md). Username identity and CRUD are implemented; 78 contract tests and 13 real Atlas integration tests pass. Its decisions supersede conflicting assumptions in earlier plans. Setup and payload examples are in [backend/README.md](../backend/README.md).
 
+Active direction (October 21, 2026): proceed toward Cloudflare deployment and verify the remaining integration on the hosted application. The user deferred local WSL/sidecar troubleshooting; its failed acceptance is recorded but is not a deployment gate. Windows Docker image builds and the deployment dry-run already pass. Next work is production account/database confirmation, Atlas access, runtime secrets and intended accounts, then deployment and hosted acceptance. Follow the [active deployment path](05-cloudflare-deployment.md#active-path-deploy-and-verify-on-cloudflare).
+
 Separate follow-up: [Authentication follow-up](07-auth-follow-up.md) records implemented MongoDB login throttling, strict Origin/CSRF protection and frontend recovery handling (October 21). The Cloudflare Container/Worker and shared-secret ingress check are prepared; remote deployment and production acceptance remain pending.
 
 Supporting plans:

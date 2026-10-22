@@ -41,6 +41,24 @@ uv run uvicorn app.main:create_app --factory --reload
 
 API: <http://127.0.0.1:8000/api>. Interactive OpenAPI: <http://127.0.0.1:8000/docs>.
 
+For authorized hosted provisioning, use the separate insert-only command from
+`backend/`, substituting the confirmed database and approved username:
+
+```powershell
+.venv/Scripts/python.exe -m app.provision_user --database kanban_prod <approved-username>
+```
+
+It prompts without echo for the approved Atlas URI and a confirmed password,
+requires TLS certificate/hostname verification, uses the existing Argon2id hasher,
+and inserts with majority acknowledgement. It does not load `.env`, start FastAPI,
+initialize indexes, reset an existing password, or revoke sessions. Duplicate
+accounts abort, including races after a preflight. Driver write retries are disabled;
+an uncertain result requires a private existence check before any manual retry.
+Run in a secure interactive terminal; input refuses an echoed fallback. The existing
+`app.create_user` command remains the deliberate password-reset command and must
+not be used for insert-only production provisioning. Example names above do not
+authorize creating production accounts. See the [coordinated release plan](../.agent/05-cloudflare-deployment.md#coordinated-release-plan-october-21-2026).
+
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `JWT_SECRET` | required | At least 32 characters; use a random secret |
@@ -319,5 +337,9 @@ October 21 preparation: 257 backend tests (none skipped), Ruff checks and the
 production Docker smoke/restart test passed. Full local Wrangler acceptance is
 blocked by missing socket-match/TPROXY support in WSL kernel 5.15.146.1; deployment and Atlas
 acceptance remain pending. See the [verification record](../.agent/05-cloudflare-deployment.md#container-preparation-verification-october-21-2026).
-The [diagnosis and next action](../.agent/05-cloudflare-deployment.md#wsl-networking-diagnosis-october-21-2026)
-include isolated capability probes and the WSL update/restart prerequisite.
+The user chose to defer that local repair and proceed toward deployment and hosted
+verification. Windows Docker image builds already work; passing the local Worker
+harness is not a deployment prerequisite. Follow the [active deployment path](../.agent/05-cloudflare-deployment.md#active-path-deploy-and-verify-on-cloudflare)
+for account/database confirmation, Atlas access, secrets, intended accounts, and
+hosted acceptance. The [WSL diagnosis](../.agent/05-cloudflare-deployment.md#wsl-networking-diagnosis-october-21-2026)
+is retained only for optional future local development.

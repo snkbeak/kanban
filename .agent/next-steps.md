@@ -2,6 +2,8 @@
 
 Updated October 21, 2026. This is the active checklist for work remaining after backend CRUD delivery. The confirmed decisions and implementation resolutions in [06-backend-crud.md](06-backend-crud.md) are authoritative. API examples and setup commands are in [backend/README.md](../backend/README.md).
 
+Current priority (October 21, 2026): the user chose **deployment and hosted verification**. Defer local WSL/sidecar repair; its failed local acceptance is not a prerequisite to publish. Continue with [Deploy the complete application](#4-deploy-the-complete-application) and the [active deployment path](05-cloudflare-deployment.md#active-path-deploy-and-verify-on-cloudflare). Confirm production configuration, then verify the real Worker/Container/Atlas integration on Cloudflare. No system update/restart is part of this path.
+
 ## Completed baseline
 
 - Username is the account primary key; public users contain username only.
@@ -111,9 +113,9 @@ Done when the multi-user browser workflow, deployment persistence, and backup re
 
 The deployment design is now [Cloudflare Workers Paid + Containers + Atlas](05-cloudflare-deployment.md), retaining existing login/authentication. Worker code, container packaging, runtime secrets, ingress validation, local configuration and disposable verification harnesses are prepared. No deployment, Atlas network changes, remote secret writes or application provisioning were performed.
 
-- [ ] Confirm the production Cloudflare account and proposed `MONGO_DB=kanban_prod`.
+- [x] Confirm production account `f7011f208b78981f9835cabb9f4c24c1` (`christopher.mitchell027@gmail.com`), hostname and fresh `kanban_prod`: Project 0 / Cluster0, free Atlas, AWS us-east-1. Hosted usernames are `sea`, `poopfart`, `sneaky`. Names/targets do not authorize remote writes.
 - [ ] Configure appropriate Atlas credentials and network access for Container egress; do not assume a static IP or broaden the allowlist automatically.
-- [ ] Set production `MONGO_URL`, `JWT_SECRET`, and `PROXY_SECRET` Worker secrets after authorization; then deploy and deliberately provision production accounts.
+- [ ] Follow the [coordinated release plan](05-cloudflare-deployment.md#coordinated-release-plan-october-21-2026): approve Atlas access and bounded acceptance, preflight the selected database, insert only approved absent users, then upload `MONGO_URL`, `JWT_SECRET`, and `PROXY_SECRET` with the first deployment. Never use the reset command for initial production provisioning.
 - [ ] Verify live public-hostname behavior, idle sleep/wake, container rollout/restart persistence and billing alerts. Visible board polling keeps the container awake.
 - [ ] Repeat production backup/restore, collaboration and usability acceptance.
 
@@ -125,6 +127,6 @@ Local Wrangler container development requires **Linux/WSL**; Windows Docker buil
 - **257 backend tests passed, none skipped**: 234 contract/unit and 23 integration tests using disposable local MongoDB databases. Ruff lint/format passed; the upstream Starlette/HTTPX warning remains.
 - **12 frontend API/state tests, 6 Worker tests and 17 isolated Chromium journeys passed**. Astro/TypeScript checks, production build and Wrangler deployment dry-run passed. Browser fixtures used built static preview, not a live API proxy.
 - The production Docker image passed auth, ingress/Origin rejection, throttling, CRUD, non-root/no-.env checks and restart persistence against a disposable Docker MongoDB replica set.
-- **Full local Worker-to-container acceptance remains blocked**: WSL kernel 5.15.146.1 has socket-match and TPROXY support compiled out. Direct probes with the exact AMD64 sidecar reproduce the failing rules; see the [diagnosis and repeatable commands](05-cloudflare-deployment.md#wsl-networking-diagnosis-october-21-2026). The smallest next action is an approved WSL update/restart, followed by both kernel probes and the full harness. No system update/restart or global networking change was performed.
+- **Full local Worker-to-container acceptance failed; repair is deferred**: WSL kernel 5.15.146.1 has socket-match and TPROXY support compiled out. Direct probes with the exact AMD64 sidecar reproduce the failing rules; the [diagnosis and repeatable commands](05-cloudflare-deployment.md#wsl-networking-diagnosis-october-21-2026) remain available for optional future local development. The user chose to proceed toward deployment and hosted acceptance without fixing WSL. No system update/restart or global networking change was performed.
 - Harness follow-up: **8 diagnostics/cleanup guard tests passed**, with Ruff lint/format passing. The updated real WSL run reports the stopped sidecar before readiness timeout and removes its Worker sidecar, MongoDB project and generated secrets. This validates failure handling, **not API acceptance**. Earlier application/backend/frontend counts above are historical and were not rerun during this runtime diagnosis.
 - No application accounts/data, Atlas settings, remote secrets or deployments were changed. Production ingress, Atlas connectivity, sleep/wake, rollout persistence, backups and public-hostname acceptance remain pending.

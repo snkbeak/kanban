@@ -2,6 +2,14 @@
 
 Updated October 21, 2026. The user selected **Cloudflare Workers Paid + Cloudflare Containers**, with **MongoDB Atlas**, and confirmed Workers Paid is enabled and Docker Desktop is installed. Keep username/password authentication, Argon2id, HttpOnly cookies, revocable tokens, login limits and strict Origin checks. No GitHub SSO or backend rewrite is planned.
 
+## Active path: deploy and verify on Cloudflare
+
+The user chose to defer local WSL/sidecar repair and proceed toward hosted deployment (October 21, 2026). **Passing local Wrangler-to-container acceptance is not a deployment prerequisite.** Keep its failed result recorded; perform the remaining integration acceptance on Cloudflare after production configuration is ready.
+
+Docker remains necessary for this project's image build/push workflow, which already works from Windows PowerShell. The failing networking sidecar belongs to local `wrangler dev`; it is not needed to build and upload the image. Cloudflare runs the deployed container on its own infrastructure. See the [deployment workflow](https://developers.cloudflare.com/containers/get-started/).
+
+Next: confirm the account/database, resolve Atlas credentials and network access, configure runtime secrets and intended accounts, then deploy and verify the public hostname using the release steps below. Budget for hosted testing and possible deployment/debugging iterations. Existing passing tests and the dry-run support proceeding, but do not establish hosted acceptance. No WSL/Docker upgrade, restart, or local sidecar repair is required for this chosen path. This documentation update does not itself deploy or change remote configuration/data.
+
 ## Prepared topology
 
 Browser -> `kanban.sneakybeak.net` Worker -> private Container binding -> FastAPI -> Atlas. The Worker also serves Astro static assets. `frontend/wrangler.jsonc` preserves the Worker name, custom domain, HTML/404 behavior, disabled workers.dev and preview URLs. `/api` and `/api/*` always run the Worker first; API errors never fall through to HTML.
@@ -24,7 +32,7 @@ Worker secrets, supplied only at runtime:
 - `JWT_SECRET`: random stable signing secret; preserve across restarts to preserve sessions.
 - `PROXY_SECRET`: a separate random secret for ingress authentication.
 
-Checked-in nonsecret vars are `DEPLOYMENT_ENV=production`, `PUBLIC_ORIGIN=https://kanban.sneakybeak.net`, and proposed `MONGO_DB=kanban_prod`. **Confirm that database name before deployment.** Runtime translation sets `APP_ENV=production`, `COOKIE_SECURE=true`, and an exact `TRUSTED_ORIGINS` array. Default token lifetime and login limits remain unchanged. Preview/local configurations must not use production credentials or data.
+Checked-in nonsecret vars are `DEPLOYMENT_ENV=production`, `PUBLIC_ORIGIN=https://kanban.sneakybeak.net`, and `MONGO_DB=kanban_prod`. The user confirmed this is a fresh production database on October 21. Runtime translation sets `APP_ENV=production`, `COOKIE_SECURE=true`, and an exact `TRUSTED_ORIGINS` array. Default token lifetime and login limits remain unchanged. Preview/local configurations must not use production credentials or data.
 
 ## Reproducible container build
 
@@ -38,15 +46,15 @@ docker build --platform linux/amd64 -t kanban-api:local backend
 
 Update the lockfile and image digests deliberately with verification. Do not rebuild against floating dependencies. The image never provisions or resets accounts. Startup initializes indexes/metadata idempotently and requires a transaction-capable database.
 
-## Local checks before publishing
+## Available checks and optional local development
 
-Run the container smoke test from `backend/` using the existing virtual environment (or equivalent `uv run python`). Run the Worker smoke test in **Linux/WSL** with Linux Node dependencies and Docker integration; Wrangler rejects local Container development directly on Windows:
+The production-image smoke test already passed. To rerun it after relevant backend/container changes, use the existing virtual environment from `backend/` (or equivalent `uv run python`):
 
 ```powershell
 .venv/Scripts/python.exe tests/container_smoke.py
 ```
 
-In Linux/WSL, with the required Python and Linux Node dependencies installed, run `python3 tests/worker_smoke.py` from `backend/`.
+The full local Worker smoke test is **optional and currently deferred**. If local development is revisited, run `python3 tests/worker_smoke.py` from `backend/` in Linux/WSL with Linux Node dependencies and Docker integration; Wrangler rejects local Container development directly on Windows. Do not repair WSL or rerun this harness as a gate before deployment.
 
 The first builds the production image and runs real auth, proxy/CSRF, throttling and CRUD checks on an isolated Docker MongoDB replica set, then restarts the API and verifies sessions, allowances and content survive. The second uses local Wrangler, the actual container, built static assets, generated fixture credentials and a separate disposable MongoDB replica set. Both use uniquely named Compose projects and remove only their own containers/volumes. Neither reads application .env files or contacts Atlas. The Worker check requires frontend `npm run build` first and free port 8787. Test logs/config live under ignored `.wrangler/`. The Worker harness now detects stopped sidecars during readiness, records only nonsecret state in `runtime-state.json`, removes its generated `.dev.vars`, and removes leftover Worker containers/sidecars by exact generated project/name and immutable Docker ID after stopping Wrangler. It does not prune images or build cache.
 
@@ -65,15 +73,69 @@ For manual container development, copy `.dev.vars.example` to ignored `.dev.vars
 
 ## Atlas and release prerequisites
 
-No Atlas configuration, secrets upload, application account provisioning or deployment has been performed by this preparation.
+These are the active next steps. No Atlas configuration, secrets upload, application account provisioning or deployment has been performed by this preparation.
 
-1. Confirm the intended Cloudflare account and `kanban_prod` (or choose another explicit database name).
-2. Select a least-privilege Atlas database user for that database. Runtime needs transactions, indexes and application CRUD; it does not need permission to drop databases.
-3. Resolve Atlas network access for Cloudflare Container egress. Do not assume the container has a fixed outbound IP, or that Cloudflare's published reverse-proxy IP ranges are its egress addresses. Confirm a supported network policy for the actual Atlas tier. No allowlist is broadened automatically.
-4. After explicit authorization, set Worker secrets using `npx wrangler secret put MONGO_URL`, `JWT_SECRET`, and `PROXY_SECRET` from `frontend/`. Enter secrets interactively or through secure local input, never chat, source control, build arguments or command-line literals. Secret operations change remote configuration and are not part of the dry-run.
-5. Deliberately provision the intended production accounts once using the existing operator command with the production environment selected. Repeating `app.create_user` resets a password and revokes sessions. Do not seed at startup or reuse test accounts.
-6. Deploy only when requested using `npm run deploy`. First provisioning may take minutes. Verify readiness, all three login/me/logout flows, secure cookies, Origin rejection, ingress rejection, throttling/Retry-After, card/comment CRUD, conflicts and ordering through the public hostname.
-7. Verify persistence after an actual container sleep/wake and deployment. Local restart tests are not production acceptance.
+The coordinated plan below supersedes the earlier preparation reports. Targets are confirmed; remote mutation authorization, Atlas access/credentials and hosted acceptance remain pending. First deployment will supply secrets with the application, and account creation will use the insert-only operator path.
+
+## Coordinated release plan (October 21, 2026)
+
+### Confirmed targets and preflight evidence
+
+| Item | Selection / evidence |
+| --- | --- |
+| Cloudflare | User confirmed `christopher.mitchell027@gmail.com`; account `f7011f208b78981f9835cabb9f4c24c1` is pinned in Wrangler |
+| Hostname | User owns `sneakybeak.net` and selected `kanban.sneakybeak.net` |
+| Zone | Authenticated read-only API confirms the zone is active in the selected account |
+| Existing hostname | No matching Worker Custom Domain; public A/CNAME lookups returned NXDOMAIN. DNS record API returned 403, so administrative DNS inventory remains unverified. Stop on any deployment conflict; do not replace/delete a record automatically |
+| Existing deployment | Worker deployment lookup returned 404; user confirms never deployed. Treat as first deployment, not a rollback target |
+| Atlas | User selected Project 0 / Cluster0, free tier, AWS N. Virginia (`us-east-1`); project ID, connection hostname, credential permissions and network entries remain unverified |
+| Database | `kanban_prod`, confirmed fresh; verify absence/compatibility before writes |
+| Application accounts | User selected `sea`, `poopfart`, `sneaky`; this confirms names, not permission to create/reset them |
+
+Read-only Cloudflare API calls used the existing local login and printed only nonsecret metadata. No Atlas connection, secret upload, account creation, remote configuration change or application request has occurred in this coordination pass.
+
+### Atlas proposal for approval
+
+Use the existing Cluster0; no cluster creation, tier upgrade, private endpoint or peering is proposed. Require the Atlas TLS URI with certificate and hostname verification and a dedicated credential restricted to `kanban_prod` and Cluster0. `MONGO_URL` selects the URI independently of `MONGO_DB`; never fall back to the local `.env` database. Confirm replica-set/mongos topology and transaction support before launch.
+
+Proposed custom role `kanban_runtime`: `FIND`, `INSERT`, `UPDATE`, `REMOVE`, `CREATE_COLLECTION`, `CREATE_INDEX`, and `LIST_INDEXES` on the six collections `users`, `tokens`, `login_limits`, `cards`, `counters`, `column_orders`; `DROP_INDEX` on `users` only for the startup removal of the obsolete username index. No database/collection deletion, admin, user-management or cross-database privileges. Confirm these resources/actions in the selected Atlas project before applying the role. Any broader built-in-role substitution requires a new explicit scope decision. [Atlas custom role actions](https://www.mongodb.com/docs/atlas/reference/custom-role-actions/).
+
+For hosted verification without new network infrastructure, propose an explicitly approved temporary `0.0.0.0/0` Atlas access-list entry with a seven-day expiry, labeled for this deployment. This permits connection attempts from anywhere to **all clusters in Project 0**, while TLS and database authentication remain required. Record its actual expiry in UTC and America/New_York time. Expiry will break new application database connections unless replaced by an approved ongoing policy. Do not delete or extend a pre-existing entry or renew automatically. [Atlas access lists](https://www.mongodb.com/docs/atlas/security/ip-access-list/).
+
+Cloudflare's non-HTTP egress requires `enableInternet=true`, already configured. HTTP outbound handlers do not route normal MongoDB traffic. No verified fixed Container egress IP is available; an observed IP or Cloudflare reverse-proxy ranges are unsuitable allowlists. If public Atlas access is declined, pause network-dependent work and design a validated TCP egress route separately. [Container outbound traffic](https://developers.cloudflare.com/containers/configuration/outbound-traffic/).
+
+### Execution order and authorization boundaries
+
+1. Obtain approval for the selected Atlas network duration, scoped database role/user, read-only database preflight, insert-only accounts, secret upload, publication, startup writes, bounded acceptance and one replacement rollout. The user chooses a quiet test window. No password resets, DNS-record replacement, database resets, system upgrades or WSL repair are included.
+2. Prepare an access-restricted local secrets file outside this repository and all build/static contexts, using hidden local input. Never send credentials in chat or command arguments. Identify the actual Cluster0 connection hostname and project ID from the Atlas console; do not infer a URI from its display name. Generate independent random JWT and ingress secrets (at least 32 characters; prefer 48 random bytes). Preserve any existing JWT secret if previous sessions are discovered. Save durable copies in the approved password manager, then remove the temporary upload copy after deployment. Verify only key presence/lengths, never values. First upload needs `MONGO_URL`, `JWT_SECRET`, `PROXY_SECRET`; no secret file exists from this preparation.
+3. Apply only the approved Atlas entries and role/user, recording IDs/expiry without credentials. With the explicitly selected database, perform read-only preflight without importing/starting FastAPI: inspect topology and collection/index metadata, query approved canonical usernames with inclusion projection `{_id: 1}`, and check legacy-field existence without retrieving hashes/tokens/documents. If data unexpectedly exists, stop for schema/index/backup review. FastAPI startup is not a read-only preflight: it creates indexes, initializes counters/order metadata and may remove the obsolete users index.
+4. Report absent/existing account names. Skip existing accounts. For each approved absent name, run `.venv/Scripts/python.exe -m app.provision_user --database kanban_prod <username>` from `backend/` in a secure interactive terminal. It reads URI/password without echo, confirms the password, performs a single majority-acknowledged Argon2id insert, disables write retries and refuses duplicates. It does not touch sessions. On an uncertain result, check existence privately before retrying. `app.create_user` remains a reset command and must not be substituted.
+5. From `frontend/`, run `npm.cmd run build`, then `npx.cmd wrangler deploy --secrets-file "<protected-file-path>"` only after authorization. Required secret names are declared in Wrangler. `secret put` immediately deploys a version; it is not harmless prerequisite setup. Existing deployments can later use `npm.cmd run deploy` to retain secrets. [Cloudflare secrets](https://developers.cloudflare.com/workers/configuration/secrets/).
+6. Record the source commit, Worker deployment/version ID, container application/image identity and UTC time. Confirm custom domain and certificate readiness, disabled alternate URLs, private container binding and no public backend/admin route. Cloudflare creates the Custom Domain DNS record and certificate; no manual origin-IP record is needed. An existing CNAME blocks attachment and requires separately scoped resolution. [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+7. Wait for real container readiness. Worker activation precedes image processing and a deployment can partially succeed. Do not interpret a CLI failure as proof nothing changed. Inspect actual state before recovery or retry. A first deployment may take minutes. [Deployment behavior](https://developers.cloudflare.com/containers/guides/deploy/).
+8. Execute and record the bounded acceptance below, clean up only the approved test records/sessions, and record any unverified checks. A hosted failure does not justify resuming local WSL troubleshooting. Update this runbook and commit actual results locally after execution.
+
+### Hosted acceptance scope
+
+- **Record budget:** at most three cards and four comments total, marked `hosted-acceptance-<UTC>-<random>`, with exact IDs tracked in a sanitized ledger. Use `sea` and `poopfart` for collaboration and check `sneaky` login separately. Only marked IDs may be deliberately edited/moved/deleted. Ordering can renumber existing card positions; preserve their relative order. Ticket counters and shared column revisions advance permanently and are never reset. Stop cleanup if another user has contributed to a test card.
+- **Public/readiness checks:** HTTPS `/`, `/login` and referenced JS/CSS; exact `200 {"status":"ok"}` liveness/readiness; JSON 404 for unknown API paths; unauthenticated board/me 401; API `Cache-Control: no-store`. API reads can wake the container, incur usage and trigger startup writes.
+- **Origin/ingress:** bounded unsafe requests with missing, null, foreign, malformed and duplicate Origin plus spoofed Referer/forwarding headers must yield `403 csrf_rejected` without cookies. Use nonexistent IDs for mutation probes. Public forged proxy headers are overwritten, but this does not prove direct ingress rejection. Inspect private binding configuration. Test missing/wrong/duplicate ingress secrets only if an approved private diagnostic path exists; otherwise explicitly record direct hosted ingress rejection as unverified. Do not expose a diagnostic endpoint.
+- **Accounts/sessions:** each approved account logs in, restores through reload and GET `/api/auth/me` without Origin, and logs out. Check host-only `Secure; HttpOnly; SameSite=Lax; Path=/` attributes without saving values; no JWT/password in browser storage and cleared password field. Rejected logout preserves the session; valid logout clears its cookie, and private replay of the old cookie returns 401. Keep one session for persistence checks before its final logout. Disable screenshots/traces/state exports that could capture secrets.
+- **Throttle:** confirm one unused synthetic username, make five invalid attempts then a sixth expecting `429 login_throttled` and positive `Retry-After`. The global bucket is 30 attempts per five minutes; username buckets are five per 15 minutes. Track all test logins, avoid real-user throttling and stop on unexpected limits. Existing sessions must remain usable. After persistence intervals, make at most one additional synthetic attempt per interval while the original username window remains active; do not reset buckets or automatically retry. If the window has elapsed, record that persistence assertion as unverified.
+- **CRUD/concurrency:** create/read/edit the three cards and use no more than four comments across all scenarios. Verify author-only comment edits/deletes, stale content/comment/order 409s, retained drafts and explicit refresh/reapply, selector moves, within-column order, Blocked behavior and reload persistence. Guard card deletion with both content and discussion revisions. An uncertain write requires refresh before any explicit retry.
+- **Sleep and rollout:** retain marked records, one session and the unused-name allowance. Stop all board polling; observe actual sleep after the configured two-minute idle period using platform state/metrics, then wake via readiness. Verify session, cards/comments/order and any unexpired throttle state. Repeat after one authorized actual container replacement while preserving Atlas/JWT. An unchanged deployment can skip rollout: record actual instance/image replacement, not just CLI success. Prepare the specific replacement action/image before executing; use a harmless image metadata change if needed, with the diff recorded. Never alter auth or database content to force a rollout. [Container rollouts](https://developers.cloudflare.com/containers/configuration/rollouts/).
+- **Cleanup/recovery:** delete only ledger IDs using freshly fetched revision guards, log out test sessions, let limits expire, remove temporary secret upload material, and record Atlas access expiry/ongoing policy. Halt for security failures, lost persistence, unexplained writes or sustained readiness failure. Recovery/rollback must be explicitly authorized and restore compatible Worker/container/config while preserving Atlas. With no previous deployment, there is no proven prior version to roll back to. Recheck readiness, sessions, ingress and persistence after recovery.
+
+Existing smoke harnesses seed disposable databases and delete their resources, the container probe can persist a raw cookie, and the live browser suite assumes localhost. **Do not retarget them unchanged.** Hosted interactions must implement the limits above; until those run, historical fixture/smoke results are not hosted acceptance.
+
+### Coordination verification and remaining dependencies
+
+- Preserved all six pre-existing deployment-first documentation edits from commit `2381450`; local WSL acceptance remains deferred.
+- Added required-secret declarations and pinned the confirmed Cloudflare account. Added a separate insert-only provisioning command; password authentication, Argon2id settings, cookies, revocation, Origin/CSRF, throttling and CRUD runtime code remain unchanged.
+- Eight focused provisioning tests passed without MongoDB access; Ruff lint/format passed. The initial run had seven passes plus a pytest cache warning and one lint issue, corrected before the final eight-test run with cache disabled.
+- Wrangler 4.151.2 deployment dry-run passed with required secrets declared: Worker bundle, 14 existing static files and Windows Docker image build. It published nothing. The account pin was added after this dry-run and matches the authenticated active-zone read. No frontend source changed; historical frontend/browser/backend suites were not repeated.
+- Cloudflare zone ownership is verified; DNS administrative inventory is not readable with the current login. Atlas credentials/network permissions, database preflight, production provisioning, upload, publication and every hosted acceptance result remain pending. No remote cleanup was needed because no remote mutation occurred. The local dry-run removed its temporary image tag; no system upgrade or sidecar repair occurred.
+- Smallest next action: approve the concrete Atlas access duration and execution scope above, then securely supply the scoped Atlas connection/management access through local input. Do not paste credentials into chat.
 
 ## Costs and operations
 
@@ -98,6 +160,8 @@ References: [Containers getting started](https://developers.cloudflare.com/conta
 
 ## WSL networking diagnosis (October 21, 2026)
 
+**Deferred reference only:** this diagnosis explains the failed local test. The user selected hosted deployment/verification instead; the repair instructions below are optional future local-development work, not additional deployment requirements.
+
 Environment: Windows 10 build 19045, WSL 2.1.5.0, Ubuntu and Docker sharing kernel `5.15.146.1-microsoft-standard-WSL2`, Docker Desktop 4.29.0 / Engine 26.0.0, Linux AMD64, cgroup v1. Wrangler 4.151.2 and `@cloudflare/containers` 0.3.7 use isolated Linux Node 24.19.0 under `frontend/.wrangler/wsl-tools/`.
 
 The exact cached sidecar is `cloudflare/proxy-everything:3cb1195@sha256:0ef6716c52430096900b150d84a3302057d6cd2319dae7987128c85d0733e3c8`; Docker confirms `amd64`. An unmodified harness rerun (`kanban-worker-test-8e5e0e0b0075`) built the application image, then timed out before readiness. Workerd explicitly reported `started sidecar not running`. The stopped sidecar had exit 1, `OOMKilled=false`, empty Docker state error, and `NET_ADMIN`. Its command enabled DNS/TLS interception and disabled IPv6. MongoDB was healthy; FastAPI never launched. Empty Wrangler-sidecar logs did not identify the cause.
@@ -121,7 +185,7 @@ docker run --rm --pull=never --cap-add NET_ADMIN --entrypoint iptables $sidecarI
 docker run --rm --pull=never --cap-add NET_ADMIN --entrypoint iptables $sidecarImage -t mangle -A PREROUTING -p tcp -j TPROXY --tproxy-mark 0x1/0x1 --on-port 41209
 ```
 
-The smallest next system action is an approved **WSL update and restart**, then rerun both probes before full acceptance. Microsoft's [6.6 kernel configuration](https://github.com/microsoft/WSL2-Linux-Kernel/blob/linux-msft-wsl-6.6.y/arch/x86/configs/config-wsl) includes both Xtables features as modules, unlike the current running kernel. This supports testing a newer WSL kernel; it does not establish that an arbitrary Docker upgrade fixes the issue or guarantee module availability in the Docker runtime after updating.
+If local development is revisited, the proposed repair is an approved **WSL update and restart**, then both probes before full local acceptance. Microsoft's [6.6 kernel configuration](https://github.com/microsoft/WSL2-Linux-Kernel/blob/linux-msft-wsl-6.6.y/arch/x86/configs/config-wsl) includes both Xtables features as modules, unlike the current running kernel. This supports testing a newer WSL kernel; it does not establish that an arbitrary Docker upgrade fixes the issue or guarantee module availability in the Docker runtime after updating.
 
 Before any update/restart, save WSL work and coordinate Docker downtime: `wsl --shutdown` terminates **all** WSL distributions and the shared VM. With explicit authorization, use Microsoft's documented `wsl --update`, then restart WSL/Docker Desktop in the agreed window. Recheck `wsl --version`, Ubuntu `uname -r`, and Docker's kernel version, confirm the two probes pass, and rerun:
 
@@ -129,6 +193,6 @@ Before any update/restart, save WSL work and coordinate Docker downtime: `wsl --
 wsl -d Ubuntu -- env PATH=/mnt/c/Users/cjmga/Code/kanban/frontend/.wrangler/wsl-tools/node-v24.19.0-linux-x64/bin:/usr/local/bin:/usr/bin:/bin PYTHONPATH=/mnt/c/Users/cjmga/Code/kanban/frontend/.wrangler/wsl-tools/python WRANGLER_CLI=/mnt/c/Users/cjmga/Code/kanban/frontend/.wrangler/wsl-tools/node_modules/wrangler/bin/wrangler.js python3 /mnt/c/Users/cjmga/Code/kanban/backend/tests/worker_smoke.py
 ```
 
-Microsoft documents [update and shutdown behavior](https://learn.microsoft.com/en-us/windows/wsl/basic-commands). No update, restart, custom kernel installation, global network change, or sidecar bypass was performed. If updating is unsuitable, use a separate Linux development environment whose Docker kernel passes the same probes. Only a full successful harness run accepts Worker routing; passing kernel probes alone is insufficient. MongoDB connectivity through the sidecar remains untested beyond startup.
+Microsoft documents [update and shutdown behavior](https://learn.microsoft.com/en-us/windows/wsl/basic-commands). No update, restart, custom kernel installation, global network change, or sidecar bypass was performed. A separate Linux development environment whose Docker kernel passes the same probes is another optional local-development route. Only a full successful harness run accepts the local Worker path; passing kernel probes alone is insufficient. MongoDB connectivity through the local sidecar remains untested beyond startup. Hosted Worker/Container/Atlas acceptance will be evaluated separately on Cloudflare.
 
 Follow-up verification: **8 diagnostics/cleanup guard tests passed**, none skipped; Ruff lint and format checks passed for all three changed Python files. The updated real WSL run (`kanban-worker-test-99e870a20e77`) failed promptly on the stopped sidecar and retained its sanitized state under `frontend/.wrangler/<project>/runtime-state.json`. Its generated secrets, sidecar and Compose resources were removed. The baseline rerun's stopped sidecar was explicitly removed. No application acceptance assertion ran in either attempt. The earlier 257 backend, 12 frontend, 6 Worker and 17 browser results remain historical; those suites were not rerun for these harness-only changes.

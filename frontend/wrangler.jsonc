@@ -1,11 +1,13 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "kanban-sneakybeak-net",
+  "account_id": "f7011f208b78981f9835cabb9f4c24c1",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-19",
   "send_metrics": false,
   "workers_dev": false,
   "preview_urls": false,
+  "secrets": { "required": ["MONGO_URL", "JWT_SECRET", "PROXY_SECRET"] },
   "assets": {
     "binding": "ASSETS",
     "run_worker_first": ["/api", "/api/*"],

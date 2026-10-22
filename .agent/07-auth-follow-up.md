@@ -52,6 +52,8 @@ The CRUD implementation still requires authentication for board/user data, autho
 
 ## Container ingress follow-up
 
+The user selected deployment and hosted verification as the next path. Local WSL/sidecar repair is deferred and does not gate publication; production ingress, Origin, session and CRUD acceptance remain required on Cloudflare. See the [active deployment path](05-cloudflare-deployment.md#active-path-deploy-and-verify-on-cloudflare).
+
 Production now also requires `PROXY_SECRET`. Every request except exact GET liveness
 must have one matching `X-Kanban-Proxy-Secret` value; rejection is `403 proxy_forbidden`
 before Origin/routing/credentials/database work and never changes cookies or sessions.

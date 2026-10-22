@@ -246,12 +246,29 @@ container with separate local configuration.
 
 ## Deploy when ready
 
-The following command builds Astro and then publishes to Cloudflare. Run it only
-when you intend to deploy:
+The active path is to deploy and verify the integration on Cloudflare after the
+production configuration is ready. The user deferred local WSL/sidecar repair;
+`preview:cloudflare` and the local Worker harness are optional, not deployment
+gates. Docker must still be running for image build/push; Windows builds and the
+deployment dry-run already pass. Follow the [deployment prerequisites](../.agent/05-cloudflare-deployment.md#atlas-and-release-prerequisites)
+for the account/database, Atlas access, runtime secrets and intended accounts.
+
+For the first authorized deployment, build Astro and upload the approved secrets
+with the application. Use an access-restricted JSON file outside the repository,
+static assets and Docker build context; never put secret values on the command line:
 
 ```powershell
-npm run deploy
+npm.cmd run build
+npx.cmd wrangler deploy --secrets-file "<protected-file-path>"
 ```
+
+The file must contain `MONGO_URL`, `JWT_SECRET`, and `PROXY_SECRET`. Wrangler declares
+these as required secrets. Preserve an existing JWT signing secret when retaining
+sessions. Remove the temporary upload file after use; retain secrets in the approved
+password manager. `wrangler secret put` immediately deploys a version and is not a
+preparation-only action. Later authorized deploys can use `npm.cmd run deploy` to
+retain existing secrets. See [Cloudflare secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
+and the [coordinated release plan](../.agent/05-cloudflare-deployment.md#coordinated-release-plan-october-21-2026).
 
 Wrangler uses `wrangler.jsonc` to upload `dist/`, deploy the API Worker/container, and attach the custom domain
 `kanban.sneakybeak.net`. Cloudflare provisions the custom-domain DNS record and
@@ -275,8 +292,8 @@ assets remain separate; the API uses an exact public-origin check, a 20-second
 upstream deadline, no automatic write retries, and no caching. Missing secrets
 fail closed. Unexpected container HTML/redirects become generic gateway errors.
 The production hostname remains `https://kanban.sneakybeak.net`; alternate Worker
-URLs stay disabled. `MONGO_DB=kanban_prod` is the proposed production database and
-must be confirmed before publication.
+URLs stay disabled. The user confirmed `MONGO_DB=kanban_prod` as a fresh database
+on Atlas Project 0 / Cluster0 (free tier, AWS us-east-1); remote changes still need approval.
 
 Run `npm run test:worker` for isolated proxy contracts, `npm run check` for Astro
 and Worker TypeScript checks, and `npm run deploy:check` to build/bundle the image
@@ -294,4 +311,5 @@ Astro/TypeScript checks, build and deployment dry-run passed. Full local Wrangle
 acceptance is blocked by missing socket-match/TPROXY support in WSL kernel 5.15.146.1; browser fixtures
 used static preview. See the [verification record](../.agent/05-cloudflare-deployment.md#container-preparation-verification-october-21-2026).
 The [WSL diagnosis](../.agent/05-cloudflare-deployment.md#wsl-networking-diagnosis-october-21-2026)
-records the exact failing rules and the proposed update/restart, which has not been performed.
+records the exact failing rules and an optional future repair. Repair is deferred;
+no WSL update/restart is required before pursuing hosted deployment and acceptance.
