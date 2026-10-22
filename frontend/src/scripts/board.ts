@@ -1,4 +1,4 @@
-import { api, ApiError, columns, loginErrorMessage, type Card, type Column, type Comment, type Content, type User } from '../lib/api';
+import { api, ApiError, columns, csrfErrorMessage, loginErrorMessage, type Card, type Column, type Comment, type Content, type User } from '../lib/api';
 import { BoardState, contentChanges, contentOf, matches, type Filters } from '../lib/board-state';
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string, root: ParentNode = document) => root.querySelector<T>(selector)!;
@@ -40,6 +40,7 @@ const field = (name: string) => form.elements.namedItem(name) as HTMLInputElemen
 function message(text: string, editor = false) { $(editor ? '#editor-status' : '#board-status').textContent = text; }
 function describe(error: unknown) {
   if (!(error instanceof ApiError)) return 'Something went wrong. Refresh and try again; your draft is preserved.';
+  if (error.code === 'csrf_rejected') return `${csrfErrorMessage} Your draft is preserved.`;
   if (error.status === 403) return 'Only the comment author can change this comment. Your draft is preserved.';
   if (error.status === 404) return 'This ticket or comment was removed. Your draft is preserved.';
   if (error.status === 409) return 'Another save changed this resource. Review the refreshed state before deliberately reapplying your changes.';

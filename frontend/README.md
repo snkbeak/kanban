@@ -28,7 +28,7 @@ Start FastAPI separately using [backend setup](../backend/README.md). Developmen
 requests to `/api` proxy to `http://127.0.0.1:8000` with the same path and cookies.
 To select another development backend, set `$env:API_ORIGIN = 'http://127.0.0.1:8001'`
 before starting Astro. This is a server-side process variable, not a browser URL
-or a MongoDB setting. Use `COOKIE_SECURE=false` for local HTTP. No frontend command
+or a MongoDB setting. Use `COOKIE_SECURE=false` and `APP_ENV=development` for local HTTP. The backend defaults trust browser origins `http://localhost:4321` and `http://127.0.0.1:4321`; explicitly update `TRUSTED_ORIGINS` for another port. `API_ORIGIN` does not configure browser trust. No frontend command
 creates accounts or changes application secrets.
 
 The Astro 7.4 Windows development runner required explicit pre-bundling of
@@ -71,8 +71,23 @@ Retry time is guidance, not a reservation; other traffic may exhaust the allowan
 The default backend policy is 5 attempts per canonical username per 15 minutes
 and 30 shared across everyone per 5 minutes, counting successes and failures.
 See [backend policy and settings](../backend/README.md#login-throttling).
-Origin/CSRF protection remains pending in
-[07-auth-follow-up.md](../.agent/07-auth-follow-up.md); no CSRF contract is added.
+Origin/CSRF protection uses an exact backend allowlist on every unsafe request,
+including login and logout. The shared client uses same-origin fetch mode and
+credentials; the browser supplies Origin automatically. No CSRF token, extra
+cookie, browser storage, or manual Origin header is needed. Missing, malformed,
+null, duplicate and untrusted origins return `403 csrf_rejected`; Referer is not
+a fallback. This error is distinct from comment ownership and explains that the
+operator should check the site URL, allowlist and proxy, then the user can retry
+explicitly. Both login forms clear passwords. Board and failed logout requests
+retain content/comment drafts and the session, without automatic replay. Keep
+the tab open during configuration repair; page reload/navigation still loses
+in-memory drafts. See the [complete policy and production settings](../backend/README.md#origin--csrf-protection).
+
+The future Worker must preserve the browser Origin unchanged, never synthesize
+it, and preserve cookies, error envelopes, statuses and Retry-After without API
+caching. Strict Origin checks do not authenticate this proxy or prevent direct
+backend access. Deployment, proxy authentication/backend-origin protection and
+production acceptance remain pending.
 
 ## Focused checks
 
@@ -108,6 +123,19 @@ All 14 tests subsequently passed against the built static site using
 This is valid for the intercepted HTTP fixtures, which do not need an API proxy;
 it does not establish live proxy acceptance. The dev-server route issue remains
 separate maintenance work. No live accounts, Atlas, or deployment were used.
+
+Origin/CSRF verification on October 21: **12 API/state tests and all 17 isolated
+Chromium journeys passed**, with no skips; Astro/TypeScript checks and production
+build passed. Every fixture mutation asserts the real browser-generated Origin.
+New journeys cover both login forms, explicit recovery, password clearing, empty
+browser storage, content/comment draft retention and rejected logout without
+session loss or replay. The initial browser run passed 16/17; the remaining test
+had a case-sensitive success-message expectation, corrected before its passing
+focused rerun. Node/Playwright worker `EPERM` failures were resolved by approved
+reruns. Fixtures ran against built `astro preview` on port 4321, not the broken
+dev runner; this establishes neither live API-proxy nor production acceptance.
+The opt-in live harness now explicitly supplies Origin on its non-browser HTTP
+mutations; it was **not run** against application accounts/data in this change.
 
 ## Live FastAPI/Atlas acceptance
 

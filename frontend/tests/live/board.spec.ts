@@ -44,6 +44,8 @@ async function save(page: Page, id: string, status = 200) {
 }
 
 test('live cookies, two-session conflicts, retained drafts and persisted manual ordering', async ({ browser, baseURL }, testInfo) => {
+  // APIRequestContext is a non-browser client and must supply Origin explicitly.
+  const originHeaders = { Origin: new URL(baseURL!).origin };
   const marker = `live-${randomUUID().slice(0, 18)}`;
   console.info(`Live acceptance run: ${marker}`);
   const contextA = await browser.newContext({ baseURL });
@@ -97,7 +99,7 @@ test('live cookies, two-session conflicts, retained drafts and persisted manual 
     await a.route(`**/api/cards/${first}`, async route => {
       if (route.request().method() === 'PATCH') {
         const latest: Card = await (await contextB.request.get(`/api/cards/${first}`)).json();
-        const changed = await contextB.request.patch(`/api/cards/${first}`, {
+        const changed = await contextB.request.patch(`/api/cards/${first}`, { headers: originHeaders,
           data: { expected_version: latest.version, description: 'Concurrent save at request time' },
         });
         expect(changed.status()).toBe(200);
@@ -128,7 +130,7 @@ test('live cookies, two-session conflicts, retained drafts and persisted manual 
     await expect(a.locator('#board-status')).toContainText('Last successful data is retained');
     await expect(a.getByLabel('Title', { exact: true })).toHaveValue('Draft through network and session recovery');
     await contextA.setOffline(false);
-    expect((await contextA.request.post('/api/auth/logout')).status()).toBe(204);
+    expect((await contextA.request.post('/api/auth/logout', { headers: originHeaders })).status()).toBe(204);
     await a.getByRole('button', { name: 'Refresh ticket', exact: true }).click();
     await expect(a.locator('#session-dialog')).toBeVisible();
     await login(a, 'A', true);
@@ -141,7 +143,7 @@ test('live cookies, two-session conflicts, retained drafts and persisted manual 
     await a.route(`**/api/cards/${first}/move`, async route => {
       const board: Board = await (await contextB.request.get('/api/cards')).json();
       const neighbor = board.cards.find(card => card.id === second)!;
-      const changed = await contextB.request.post(`/api/cards/${second}/move`, {
+      const changed = await contextB.request.post(`/api/cards/${second}/move`, { headers: originHeaders,
         data: { column: 'review', before_card_id: null, expected_version: neighbor.version, expected_order_versions: board.order_versions },
       });
       expect(changed.status()).toBe(200);
@@ -195,12 +197,12 @@ test('live cookies, two-session conflicts, retained drafts and persisted manual 
         if (response.status() !== 200) throw new Error('Cleanup read failed');
         const card: Card = await response.json();
         if (card.tag !== marker || card.creator !== user('A')) throw new Error('Ownership marker changed');
-        const deleted = await contextB.request.delete(`/api/cards/${id}?expected_version=${card.version}&expected_comments_version=${card.comments_version}`);
+        const deleted = await contextB.request.delete(`/api/cards/${id}?expected_version=${card.version}&expected_comments_version=${card.comments_version}`, { headers: originHeaders });
         if (deleted.status() !== 204) throw new Error('Guarded cleanup failed');
       } catch { cleanupIssues.push(id); }
     }
     for (const context of [contextA, contextB]) {
-      try { await context.request.post('/api/auth/logout'); } catch { /* Session expires normally if unavailable. */ }
+      try { await context.request.post('/api/auth/logout', { headers: originHeaders }); } catch { /* Session expires normally if unavailable. */ }
       await context.close();
     }
     testInfo.annotations.push({ type: 'live-run', description: `${marker}; created IDs: ${created.join(', ') || 'none'}` });
@@ -209,6 +211,8 @@ test('live cookies, two-session conflicts, retained drafts and persisted manual 
 });
 
 test('live comment ownership, stale edits, uncertain responses, cap and guarded deletion', async ({ browser, baseURL }) => {
+  // APIRequestContext is a non-browser client and must supply Origin explicitly.
+  const originHeaders = { Origin: new URL(baseURL!).origin };
   const marker = `live-${randomUUID().slice(0, 18)}`;
   console.info(`Live discussion run: ${marker}`);
   const contextA = await browser.newContext({ baseURL });
@@ -245,7 +249,7 @@ test('live comment ownership, stale edits, uncertain responses, cap and guarded 
     await refresh(b);
     await open(b, id);
     await expect(b.getByRole('button', { name: 'Edit comment', exact: true })).toHaveCount(0);
-    const forbidden = await contextB.request.patch(path, { data: { text: 'Forbidden edit', expected_comment_version: 1 } });
+    const forbidden = await contextB.request.patch(path, { headers: originHeaders, data: { text: 'Forbidden edit', expected_comment_version: 1 } });
     expect(forbidden.status()).toBe(403);
     const unchanged: Card = await (await contextB.request.get(`/api/cards/${id}`)).json();
     expect(unchanged.comments).toEqual(withComment.comments);
@@ -254,7 +258,7 @@ test('live comment ownership, stale edits, uncertain responses, cap and guarded 
     await a.getByRole('button', { name: 'Edit comment', exact: true }).click();
     await a.getByLabel('Edit comment', { exact: true }).fill('Retained author draft');
     await a.route(`**${path}`, async route => {
-      const changed = await authorSession.request.patch(path, { data: { text: 'Another author session saved', expected_comment_version: 1 } });
+      const changed = await authorSession.request.patch(path, { headers: originHeaders, data: { text: 'Another author session saved', expected_comment_version: 1 } });
       expect(changed.status()).toBe(200);
       await route.continue();
     }, { times: 1 });
@@ -299,13 +303,13 @@ test('live comment ownership, stale edits, uncertain responses, cap and guarded 
     await a.getByLabel('Add a comment').fill('');
 
     for (let i = 2; i < 20; i++) {
-      const response = await contextB.request.post(`/api/cards/${id}/comments`, { data: { text: `Cap check ${i}` } });
+      const response = await contextB.request.post(`/api/cards/${id}/comments`, { headers: originHeaders, data: { text: `Cap check ${i}` } });
       expect(response.status()).toBe(201);
     }
     await refresh(a);
     await expect(a.locator('#discussion-heading')).toHaveText('Comments (20/20)');
     await expect(a.getByRole('button', { name: 'Add comment', exact: true })).toBeDisabled();
-    const overflow = await contextB.request.post(`/api/cards/${id}/comments`, { data: { text: 'Over capacity' } });
+    const overflow = await contextB.request.post(`/api/cards/${id}/comments`, { headers: originHeaders, data: { text: 'Over capacity' } });
     expect(overflow.status()).toBe(422);
     expect((await overflow.json()).error.code).toBe('comment_limit_reached');
     const owned = a.locator(`[data-comment="${commentId}"]`);
@@ -322,7 +326,7 @@ test('live comment ownership, stale edits, uncertain responses, cap and guarded 
     await a.route(url => url.pathname === `/api/cards/${id}`, async route => {
       const current: Card = await (await contextB.request.get(`/api/cards/${id}`)).json();
       const comment = current.comments.find(item => item.author === user('B'))!;
-      const update = await contextB.request.patch(`/api/cards/${id}/comments/${comment.id}`, {
+      const update = await contextB.request.patch(`/api/cards/${id}/comments/${comment.id}`, { headers: originHeaders,
         data: { text: 'Discussion updated before deletion', expected_comment_version: comment.version },
       });
       expect(update.status()).toBe(200);
@@ -351,13 +355,13 @@ test('live comment ownership, stale edits, uncertain responses, cap and guarded 
           if (response.status() !== 200) throw new Error('Cleanup read failed');
           const card: Card = await response.json();
           if (card.tag !== marker || card.creator !== user('A')) throw new Error('Ownership marker changed');
-          const deleted = await contextB.request.delete(`/api/cards/${id}?expected_version=${card.version}&expected_comments_version=${card.comments_version}`);
+          const deleted = await contextB.request.delete(`/api/cards/${id}?expected_version=${card.version}&expected_comments_version=${card.comments_version}`, { headers: originHeaders });
           if (deleted.status() !== 204) throw new Error('Guarded cleanup failed');
         }
       } catch { cleanupIssue = true; }
     }
     for (const context of [contextA, contextB, authorSession]) {
-      try { await context.request.post('/api/auth/logout'); } catch { /* Only these test sessions. */ }
+      try { await context.request.post('/api/auth/logout', { headers: originHeaders }); } catch { /* Only these test sessions. */ }
       await context.close();
     }
     if (cleanupIssue) throw new Error(`Manual cleanup review required: run ${marker}, card ${id}.`);

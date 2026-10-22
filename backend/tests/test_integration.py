@@ -60,7 +60,9 @@ async def system():
             )
             for name in ("chris", "sean"):
                 client = httpx.AsyncClient(
-                    transport=httpx.ASGITransport(app=app), base_url="http://test"
+                    transport=httpx.ASGITransport(app=app),
+                    base_url="http://test",
+                    headers={"Origin": "http://localhost:4321"},
                 )
                 clients[name] = client
                 response = await client.post(
@@ -79,6 +81,57 @@ async def create(client, **fields):
     response = await client.post("/api/cards", json={"title": "Card", "tag": "feature", **fields})
     assert response.status_code == 201, response.text
     return response.json()
+
+
+@pytest.mark.parametrize("origin", [None, "null", "https://evil.example"])
+async def test_origin_rejection_preserves_database_cookie_and_session(system, monkeypatch, origin):
+    app, db, clients = system
+    client = clients["chris"]
+    card = await create(client)
+    response = await client.post(f"/api/cards/{card['id']}/comments", json={"text": "keep me"})
+    card = response.json()
+    path = f"/api/cards/{card['id']}"
+    comment_path = f"{path}/comments/{card['comments'][0]['id']}"
+    state = await board(client)
+    verify = AsyncMock()
+    monkeypatch.setattr("app.routes.auth.verify_password", verify)
+
+    async def snapshot():
+        return {
+            name: await db[name].find({}).sort("_id", 1).to_list(None)
+            for name in await db.list_collection_names()
+        }
+
+    before = await snapshot()
+    cookie = client.cookies.get(COOKIE)
+    for method, url, body in [
+        ("POST", "/api/auth/login", {"username": " CHRIS ", "password": PASSWORD}),
+        ("POST", "/api/auth/logout", None),
+        ("POST", "/api/cards", {"title": "forbidden", "tag": "feature"}),
+        ("PATCH", path, {"title": "forbidden", "expected_version": card["version"]}),
+        ("POST", path + "/move", move_body(card, state, "done")),
+        ("POST", path + "/comments", {"text": "forbidden"}),
+        ("PATCH", comment_path, {"text": "forbidden", "expected_comment_version": 1}),
+        ("DELETE", comment_path + "?expected_comment_version=1", None),
+        ("DELETE", path + "?expected_version=1&expected_comments_version=1", None),
+    ]:
+        request = client.build_request(method, url, json=body)
+        del request.headers["origin"]
+        if origin is not None:
+            request.headers["origin"] = origin
+        response = await client.send(request)
+        assert response.status_code == 403 and response.json()["error"]["code"] == "csrf_rejected"
+        assert "set-cookie" not in response.headers
+        assert client.cookies.get(COOKIE) == cookie
+        assert await snapshot() == before
+    verify.assert_not_called()
+    # Session restoration and board reads need no Origin (as with browser GET requests).
+    saved_origin = client.headers.pop("origin")
+    assert (await client.get("/api/auth/me")).json() == {"username": "chris"}
+    assert await board(client) == state
+    client.headers["origin"] = saved_origin
+    assert (await client.post("/api/auth/logout")).status_code == 204
+    assert (await client.get("/api/auth/me")).status_code == 401
 
 
 @pytest.fixture
@@ -157,7 +210,9 @@ async def test_concurrent_login_limits_across_independent_apps(
     other_app.state.db = mongo[db.name]
     try:
         async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=other_app), base_url="http://other"
+            transport=httpx.ASGITransport(app=other_app),
+            base_url="http://other",
+            headers={"Origin": "http://localhost:4321"},
         ) as other:
             responses = await asyncio.gather(
                 *[

@@ -17,7 +17,7 @@ async function backend(page: Page, cards = [makeCard(), makeCard('b')]) {
     board: { cards, order_versions: { review: 2, backlog: 0, in_progress: 0, done: 0, blocked: 0 } } as Board,
     calls: [] as Call[], signedIn: true, username: 'chris', uncertainComment: false,
     failReads: false, conflictDelete: false, conflictMove: false, failNextComment: 0,
-    loginRetryAfter: 0,
+    loginRetryAfter: 0, rejectOrigins: false,
     pendingRead: null as null | (() => Promise<void>), holdRead: false,
   };
   const error = (route: Route, status: number, code: string) => route.fulfill({ status, json: { error: { code, message: code, fields: [] } } });
@@ -28,6 +28,11 @@ async function backend(page: Page, cards = [makeCard(), makeCard('b')]) {
     const method = request.method();
     const body = request.postDataJSON();
     fixture.calls.push({ path: url.pathname + url.search, method, body });
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+      // Validate the real browser's automatic header on every fixture mutation.
+      expect(await request.headerValue('origin')).toBe(new URL(request.url()).origin);
+      if (fixture.rejectOrigins) return error(route, 403, 'csrf_rejected');
+    }
     if (path === '/auth/login') {
       if (fixture.loginRetryAfter) return route.fulfill({ status: 429,
         headers: { 'Retry-After': String(fixture.loginRetryAfter) },
@@ -163,6 +168,83 @@ for (const recovery of [false, true]) {
     expect(fixture.calls.filter(call => call.path === '/api/auth/login')).toHaveLength(2);
   });
 }
+
+for (const recovery of [false, true]) {
+  test(`origin rejection and explicit retry in ${recovery ? 'session recovery' : 'login'}`, async ({ page }) => {
+    const fixture = await backend(page);
+    if (recovery) {
+      await page.goto('/'); await openCard(page);
+      await page.getByLabel('Title', { exact: true }).fill('Retained origin draft');
+      await page.locator('#comment-form textarea').fill('Retained comment draft');
+      fixture.signedIn = false; await refresh(page);
+      await expect(page.locator('#session-dialog')).toBeVisible();
+    } else {
+      fixture.signedIn = false; await page.goto('/login');
+    }
+    await page.clock.install();
+    fixture.rejectOrigins = true;
+    const form = page.locator(recovery ? '#session-form' : '.login-form');
+    await form.locator('[name="username"]').fill('chris');
+    await form.locator('[name="password"]').fill('password123');
+    await form.locator('button').click();
+    await expect(page.locator(recovery ? '#session-status' : '#login-status')).toContainText('site origin security check');
+    await expect(form.locator('[name="password"]')).toHaveValue('');
+    await page.clock.fastForward(61000);
+    expect(fixture.calls.filter(call => call.path === '/api/auth/login')).toHaveLength(1);
+    expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
+    fixture.rejectOrigins = false;
+    await form.locator('[name="password"]').fill('password123');
+    await form.locator('button').click();
+    await expect(page.locator('#current-user')).toHaveText('chris');
+    if (recovery) {
+      await expect(page.locator('#session-dialog')).toBeHidden();
+      await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Retained origin draft');
+      await expect(page.locator('#comment-form textarea')).toHaveValue('Retained comment draft');
+    }
+    expect(fixture.calls.filter(call => call.path === '/api/auth/login')).toHaveLength(2);
+  });
+}
+
+test('origin rejection preserves content, comments and session through explicit recovery and logout', async ({ page }) => {
+  const fixture = await backend(page);
+  await page.goto('/'); await openCard(page);
+  await page.getByLabel('Title', { exact: true }).fill('Origin draft');
+  await page.locator('#comment-form textarea').fill('Origin comment');
+  await page.clock.install();
+  fixture.rejectOrigins = true;
+  await page.getByRole('button', { name: 'Save ticket' }).click();
+  await expect(page.locator('#editor-status')).toContainText('site origin security check');
+  await expect(page.locator('#editor-status')).not.toContainText('Only the comment author');
+  await page.getByRole('button', { name: 'Add comment' }).click();
+  await expect(page.locator('#editor-status')).toContainText('Your draft is preserved');
+  await page.clock.fastForward(61000);
+  expect(fixture.calls.filter(call => call.method === 'PATCH')).toHaveLength(1);
+  expect(fixture.calls.filter(call => call.path === '/api/cards/a/comments')).toHaveLength(1);
+  expect(fixture.board.cards[0].title).toBe('First ticket');
+  expect(fixture.board.cards[0].comments).toHaveLength(0);
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Origin draft');
+  await expect(page.locator('#comment-form textarea')).toHaveValue('Origin comment');
+  await page.keyboard.press('Escape');
+  page.on('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Log out' }).click();
+  await expect(page.locator('#board-status')).toContainText('site origin security check');
+  await expect(page.locator('#current-user')).toHaveText('chris');
+  expect(fixture.signedIn).toBe(true);
+  await page.locator('[data-edit="a"]').click();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Origin draft');
+  await expect(page.locator('#comment-form textarea')).toHaveValue('Origin comment');
+  fixture.rejectOrigins = false;
+  await page.getByRole('button', { name: 'Save ticket' }).click();
+  await expect(page.locator('#editor-status')).toContainText('Ticket saved.');
+  await page.getByRole('button', { name: 'Add comment' }).click();
+  await expect(page.locator('#comment-form textarea')).toHaveValue('');
+  expect(fixture.board.cards[0].title).toBe('Origin draft');
+  expect(fixture.board.cards[0].comments[0].text).toBe('Origin comment');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Log out' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  expect(fixture.calls.filter(call => call.path === '/api/auth/logout')).toHaveLength(2);
+});
 
 test('create defaults, required tag, content edit, assignments and safe plain text', async ({ page }) => {
   const fixture = await backend(page, []);

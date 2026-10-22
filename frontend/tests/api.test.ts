@@ -14,8 +14,33 @@ test('cookie requests handle 204 and send only the content precondition on PATCH
     await api.patch('a/b', { title: 'New' }, 7);
     assert.equal(calls[1].path, '/api/cards/a%2Fb');
     assert.equal(calls[1].init.credentials, 'same-origin');
+    assert.equal(calls[1].init.mode, 'same-origin');
+    assert.equal(new Headers(calls[1].init.headers).has('Origin'), false);
     assert.equal(calls[1].init.cache, 'no-store');
     assert.deepEqual(JSON.parse(String(calls[1].init.body)), { title: 'New', expected_version: 7 });
+  } finally { globalThis.fetch = original; }
+});
+
+test('origin rejection is definite, clearly explained, and never replays login or writes', async () => {
+  const original = globalThis.fetch; let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return Response.json({ error: { code: 'csrf_rejected', message: 'Request origin is not trusted', fields: [] } }, { status: 403 });
+  };
+  try {
+    for (const action of [() => api.login('chris', 'test-password'), () => api.logout(), () => api.comment('a', 'draft')]) {
+      await assert.rejects(action(), error => {
+        assert.ok(error instanceof ApiError);
+        assert.equal(error.code, 'csrf_rejected'); assert.equal(error.uncertain, false);
+        assert.match(loginErrorMessage(error), /site origin security check/);
+        assert.match(loginErrorMessage(error), /retry explicitly/);
+        return true;
+      });
+    }
+    assert.equal(calls, 3);
+    globalThis.fetch = async () => Response.json({ username: 'chris' });
+    assert.deepEqual(await api.me(), { username: 'chris' });
+    assert.deepEqual(await api.login('chris', 'test-password'), { username: 'chris' });
   } finally { globalThis.fetch = original; }
 });
 test('validation envelopes survive the client and uncertain writes are never retried', async () => {

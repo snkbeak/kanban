@@ -8,6 +8,7 @@ from pymongo import AsyncMongoClient
 from app.cards_store import initialize_database
 from app.config import Settings
 from app.errors import register_errors
+from app.middleware import OriginProtectionMiddleware
 from app.routes.auth import router as auth_router
 from app.routes.cards import router as cards_router
 from app.routes.comments import router as comments_router
@@ -32,6 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Kanban API", lifespan=lifespan)
     app.state.settings = settings
+    app.add_middleware(OriginProtectionMiddleware, trusted_origins=settings.trusted_origins)
 
     register_errors(app)
     for router in (auth_router, cards_router, comments_router, users_router, health_router):

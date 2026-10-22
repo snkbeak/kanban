@@ -23,7 +23,7 @@ def app():
 @pytest.fixture
 def client(app):
     # No lifespan: these checks intentionally don't initialize MongoDB.
-    return TestClient(app)
+    return TestClient(app, headers={"Origin": "http://localhost:4321"})
 
 
 @pytest.mark.parametrize(

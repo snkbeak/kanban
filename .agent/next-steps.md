@@ -6,7 +6,7 @@ Updated October 21, 2026. This is the active checklist for work remaining after 
 
 - Username is the account primary key; public users contain username only.
 - Cookie/JWT authentication, revocable tokens, account creation/password reset, and read-only account listing are implemented.
-- Login throttling is implemented: configurable MongoDB allowances of 5 per canonical username per 15 minutes and 30 shared per 5 minutes, before password verification; both login screens explain retry time. Origin/CSRF and deployment remain pending.
+- Login throttling is implemented: configurable MongoDB allowances of 5 per canonical username per 15 minutes and 30 shared per 5 minutes, before password verification; both login screens explain retry time. Strict Origin/CSRF validation and frontend recovery messaging are also implemented; deployment remains pending.
 - Card/comment CRUD, persistent ordering, version preconditions, Blocked health rules, comment ownership, the 20-comment cap, and health endpoints are implemented.
 - Verification recorded at backend delivery: 78 contract tests and 13 real Atlas integration tests passed, plus Ruff lint/format checks.
 - Atlas connectivity was verified using disposable test databases, which were removed. Application accounts/data were not provisioned or reset.
@@ -66,16 +66,16 @@ Done when two browser sessions see each other's updates without losing drafts or
 - The live opt-in prerequisite fails safely when configuration is absent. With the authorized local setup, both journeys passed (each run once): login/HttpOnly cookies, content/order conflicts, retained drafts through polling/offline/revoked-session recovery, independent discussion updates, selector/Blocked behavior, drag order, and reload persistence; then author-only comment changes, stale comment edits, committed-but-lost response recovery without automatic replay, the 20-comment cap/slot reuse, and guarded whole-card deletion after another session's discussion update. All three account login/me/logout cycles also passed through the proxy.
 - Only three marked acceptance tickets were created and removed using guarded deletes. Final local audit: three accounts retained, zero cards, zero test session tokens, ticket counter at 3 (not reset). Other data was not reset. Credentials remain in ignored `frontend/.env.live`; see [live check instructions](../frontend/README.md#live-fastapiatlas-acceptance).
 - Astro initially returned a route-manifest 500 after dependency reoptimization. The documented stop/start recovered it; a real unauthenticated browser then reached login with no page errors. FastAPI readiness and proxied readiness returned 200; unauthenticated `/auth/me` returned 401. No frontend design or application behavior changes were necessary.
-- Still pending: Atlas/production application acceptance, backend restart/redeploy persistence, live mobile/keyboard usability, and additional concurrent comment-deletion edge cases. Implemented throttling and pending origin/CSRF are detailed in `07-auth-follow-up.md`.
+- Still pending: Atlas/production application acceptance, backend restart/redeploy persistence, live mobile/keyboard usability, and additional concurrent comment-deletion edge cases. Implemented throttling and origin/CSRF are detailed in `07-auth-follow-up.md`.
 
 ## 4. Deploy the complete application
 
 Follow [05-cloudflare-deployment.md](05-cloudflare-deployment.md).
 
 - [ ] Choose the Python backend host/tier. Render remains an option, not a confirmed deployment.
-- [ ] Configure the backend's application secrets, explicit database, production cookies, Atlas access, and readiness probe.
+- [ ] Configure the backend's application secrets, explicit database, `APP_ENV=production`, `COOKIE_SECURE=true`, exact HTTPS `TRUSTED_ORIGINS`, Atlas access, and readiness probe.
 - [ ] Add the Cloudflare Worker `/api` proxy alongside the existing static assets and preserve the configured `kanban.sneakybeak.net` hostname.
-- [ ] Verify cookie forwarding, API error/status preservation, disabled API caching, and bounded proxy timeouts.
+- [ ] Verify unchanged browser Origin forwarding (never synthesize trusted Origin), cookie forwarding, API error/status/Retry-After preservation, disabled API caching, and bounded proxy timeouts.
 - [ ] Decide and implement backend-origin access controls as deployment work; proxy-secret validation does not exist in the current backend.
 - [ ] Keep preview/test data and accounts separate from application data.
 - [ ] Deploy and verify the full browser flow through the public hostname.
@@ -101,5 +101,7 @@ Done when the multi-user browser workflow, deployment persistence, and backup re
 - [x] Verify backend contracts and real concurrent requests against disposable local MongoDB databases: **119 passed, none skipped** (99 contract/unit + 20 integration). Ruff lint/format checks passed. The upstream Starlette/HTTPX deprecation warning remains. Atlas and live application accounts were not used; no provisioning, reset, or deployment occurred.
 - [x] Verify frontend throttling: **11 API/state tests, 14 isolated Chromium journeys, Astro/TypeScript checks, and production build passed**; none skipped. Both login forms show retry guidance, clear passwords, and require explicit retry. The browser clock advances deterministically. Node's sandbox `spawn EPERM` was resolved by an approved rerun.
 - [ ] Resolve Astro dev-server route-loading 500s as separate maintenance. The October 21 browser run initially failed before application scripts loaded; stop/start did not recover it. All 14 journeys passed against the built site's local `astro preview` instead. No live API proxy/production acceptance is inferred from fixture results.
-- [ ] Implement origin/CSRF protection and its frontend contract, tracked in [07-auth-follow-up.md](07-auth-follow-up.md).
+- [x] Implement strict Origin/CSRF protection and its frontend contract, tracked in [07-auth-follow-up.md](07-auth-follow-up.md). All unsafe methods require one exact configured Origin; missing/null/malformed/duplicate values fail with `403 csrf_rejected` before any allowance, credential, session or data change. No Referer fallback or CSRF tokens. Frontend failures preserve drafts/sessions and require explicit retry.
+- [x] Verify Origin/CSRF: **215 backend tests passed, none skipped** (192 contract/unit + 23 real disposable local MongoDB integration tests), with Ruff lint/format checks passing. Database snapshots establish no changes on rejection; existing auth/throttling/CRUD pass. Upstream Starlette/HTTPX warning remains.
+- [x] Verify frontend Origin recovery: **12 API/state tests and all 17 isolated Chromium journeys passed**, plus Astro/TypeScript checks and production build. The initial browser run passed 16/17; the remaining success-message expectation was corrected and passed in a focused rerun. Approved reruns resolved Node/Playwright sandbox worker `EPERM`. Fixtures used built static preview on port 4321 and assert browser Origin on every mutation. No live API proxy or production acceptance is claimed. The live harness now supplies explicit Origin on non-browser requests but was not run; application accounts/data were not touched.
 - [ ] Complete authenticated Cloudflare proxy/backend-origin protection and production acceptance. Shared limits work now; one attacker can temporarily deny new logins. Only add address-specific trust after authenticating the proxy and preventing origin bypass. Preserve `429`, `Retry-After`, cookies, and API error envelopes without caching.

@@ -43,8 +43,11 @@ function retryAfter(value: string | null): number | null {
   return Number.isFinite(seconds) && seconds >= 0 ? Math.max(1, Math.ceil(seconds)) : null;
 }
 
+export const csrfErrorMessage = 'Request blocked by the site origin security check. Ask the operator to check the site URL and proxy configuration, then retry explicitly. Nothing was saved or signed out. Keep this tab open to preserve drafts.';
+
 export function loginErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.code === 'csrf_rejected') return csrfErrorMessage;
     if (error.status === 429) {
       const seconds = error.retryAfterSeconds;
       return seconds === null
@@ -62,7 +65,8 @@ export async function request<T>(path: string, method = 'GET', body?: unknown, s
   let response: Response;
   try {
     response = await fetch(`/api${path}`, {
-      method, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+      // The browser supplies Origin on unsafe requests; never synthesize or persist proof.
+      method, mode: 'same-origin', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
       headers: body === undefined ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,

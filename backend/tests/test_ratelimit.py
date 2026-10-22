@@ -26,7 +26,13 @@ def login_system(monkeypatch):
     token = AsyncMock(return_value="test-token")
     monkeypatch.setattr("app.routes.auth.verify_password", verify)
     monkeypatch.setattr("app.routes.auth.create_token", token)
-    return app, TestClient(app), collection, verify, token
+    return (
+        app,
+        TestClient(app, headers={"Origin": "http://localhost:4321"}),
+        collection,
+        verify,
+        token,
+    )
 
 
 @pytest.mark.parametrize("known", [True, False])
