@@ -1,10 +1,14 @@
 # Scope and decisions
 
-October 21 update: the user requested a [D1 migration plan](08-d1-migration.md), superseding the original MongoDB persistence choice below. Retain FastAPI, Astro/TypeScript and existing authentication/CRUD behavior. Hosted usernames are `sea`, `poopfart`, `sneaky`; historical people/local-account references are not production provisioning instructions.
+October 22 direction: [plain Python Worker + D1](08-d1-migration.md), Astro/browser TypeScript, and the existing $5/month Workers Paid plan. Replace FastAPI/Containers with direct Python handlers while preserving API/authentication/CRUD behavior. Free is optional next month after measurement. Hosted usernames are `sea`, `poopfart`, `sneaky`; local account references are not production provisioning instructions. Documentation only; no implementation in this pass.
 
 ## Required outcome
 
-Chris, Sean, and James can sign in, manage a shared Kanban board, assign work to each other, and discuss tickets. Preserve the stack from the rough draft: FastAPI and MongoDB for the backend; Astro and TypeScript for the frontend.
+Three users can sign in, manage a shared Kanban board, assign work and discuss tickets. The deployment target is one plain Python Worker with a direct D1 binding and Astro Static Assets. Preserve the implemented product contract in [06-backend-crud.md](06-backend-crud.md), including one required tag, manual ordering, Blocked health rules and independent revisions.
+
+## Original scope record
+
+The sections below preserve the original draft and its assumptions. Conflicting defaults (tags, health, ordering and accounts) were resolved in `06-backend-crud.md`; hosting choices were superseded by `08-d1-migration.md`. They are not instructions to reverse implemented behavior or choose another host.
 
 ## Board and cards
 

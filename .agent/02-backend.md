@@ -1,12 +1,14 @@
 # Backend and data
 
-October 21 direction: [migrate persistence to D1](08-d1-migration.md) while retaining FastAPI, Argon2id and the public API. This file describes the current Mongo implementation; D1 repositories, migrations, SQL atomicity and private adapter are planned, not implemented. Production usernames are `sea`, `poopfart`, `sneaky`; historical local account examples below do not authorize production seeding.
+October 22 direction: [plain Python Worker + D1](08-d1-migration.md) on the existing $5/month Workers Paid plan. Direct Python handlers replace FastAPI/ASGI/Uvicorn; Python repositories call the D1 binding without a TypeScript adapter or Container. Reuse compatible validation/business logic and preserve Argon2id, sessions and public API behavior. First prove runtime packages/authentication/D1, then port the backend. Free next month is optional after measurement. Production usernames are `sea`, `poopfart`, `sneaky`.
+
+The sections below describe the current FastAPI/Mongo implementation and historical verification. Storage, startup and HTTP framework details are migration inputs, not the target runtime. Local account examples do not authorize production seeding. No application code changed in this planning pass.
 
 Updated October 20, 2026 to reflect implementation. Confirmed decisions in [06-backend-crud.md](06-backend-crud.md) supersede the original backend proposals. Setup, payload examples, finalized contracts, and verification commands are in [backend/README.md](../backend/README.md).
 
 ## Structure and identity
 
-FastAPI uses PyMongo Async, Pydantic schemas, feature routes, and `cards_store.py` for persistence. Dependencies are declared in `backend/pyproject.toml`; `uv sync` resolves a local lockfile, which the current repository ignores. Startup initializes indexes and validates database compatibility; shutdown closes the shared client.
+FastAPI currently uses PyMongo Async, Pydantic schemas, feature routes, and `cards_store.py` for persistence. Dependencies are declared in `backend/pyproject.toml`; the backend lockfile is committed. Current startup initializes indexes and validates database compatibility; shutdown closes the shared client. The planned Worker verifies schema readiness but never applies migrations at request/startup time.
 
 Accounts contain canonical username as MongoDB `_id` plus a password hash. Public responses contain username only. No separate user ID, display name, or avatar path is stored. `python -m app.create_user <username>` creates an account or deliberately resets its password and revokes tokens. Creation/login share trim/lowercase normalization. Intended accounts are `chris`, `sean`, and `james`; frontend pictures can be keyed by username.
 

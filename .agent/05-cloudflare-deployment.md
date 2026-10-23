@@ -1,10 +1,27 @@
 # Cloudflare deployment plan
 
-Updated October 21, 2026. **Active proposed database: Cloudflare D1.** Follow the [D1 migration plan](08-d1-migration.md) before deployment. It retains FastAPI in Cloudflare Containers and proposes a private outbound Worker adapter for D1. Current code still uses MongoDB; nothing has been migrated/deployed. The Atlas prerequisites, network alternatives and commands below are historical/current-code reference and must not be executed as the active release plan.
+Updated October 22, 2026. **Active target: plain Python Worker + D1 + Astro Static Assets on the existing $5/month Workers Paid plan.** Follow [the migration plan](08-d1-migration.md) first. No FastAPI/ASGI server, Container, TypeScript SQL adapter or Atlas connection in the target. Current code is unchanged; Python Worker/D1 implementation and deployment remain pending.
 
-Workers Paid and Docker Desktop remain available. Preserve password authentication, Argon2id, HttpOnly cookies, revocable sessions, throttling and strict Origin checks. The D1 plan includes schema/atomicity work, cost measurement, authorized resource creation and bounded hosted acceptance. There is no automatic approval for implementation, secrets, remote resources or data writes.
+This request is documentation only. Later implementation/deployment instructions determine execution scope. Preserve Argon2id, revocable cookie sessions, persistent throttling and strict Origin checks. Keep Paid this month; Free next month is an optional measured follow-up, not a release gate. No billing change now.
 
-## Active path: deploy and verify on Cloudflare
+## Active Python Worker release sequence
+
+1. Complete the migration plan's Python runtime/auth/D1/assets proof, implementation, local integration/browser checks and packaging dry-run. Record versions, CPU/memory and D1 usage. CPython/Mongo tests alone do not establish compatibility.
+2. Verify account access and actual deployed state. Retain account `f7011f208b78981f9835cabb9f4c24c1`, Worker `kanban-sneakybeak-net` and domain `kanban.sneakybeak.net`; proposed D1 database is `kanban-prod`. Recorded targets are not proof of current access. Confirm production is still fresh before creating schema/accounts; preserve any discovered data.
+3. Create/select the target D1 database within the authorized release scope, record its actual ID, configure the Python binding and apply reviewed numbered migrations. Development/test databases remain separate. No DDL or account seeding in request handlers.
+4. Provision `sea`, `poopfart`, `sneaky` once through the tested insert-only operator tool using hidden password input and the compatible Argon2 profile. No local fixture imports or implicit resets. Supply stable `JWT_SECRET` through runtime secrets, and exact production origin/secure-cookie settings through Worker configuration.
+5. Deploy one Python Worker with the Astro static build. Preserve custom-domain ownership, disabled alternate URLs, API-first routing and HTML/404 behavior. Replace the active Container configuration only after checking any deployed Durable Object migration history; retire Mongo/proxy secrets and obsolete image steps. Do not delete remote state blindly.
+6. Verify HTTPS, JSON/no-store API responses, Origin rejection before side effects, cookies, login/logout/replay, shared limits and multi-user CRUD/conflicts. Use at most three marked cards and four comments total, two-account collaboration and third-account login. Clean exact acceptance records/sessions; retain counters/order increments and unrelated data.
+7. Redeploy the Worker with the same D1 database/JWT secret and prove cards, comments, ordering, sessions and limits persist. Validate recovery separately on disposable data; a restore can resurrect tokens, so document revocation/rotation before restored data is exposed.
+8. Record Worker/database/schema identifiers, checks, usage and cleanup. Prefer compatible forward fixes; Worker rollback does not restore database state. Review Free next month using measured CPU/traffic/D1 usage and recovery needs.
+
+Exact new CLI commands belong in the runbook after the Python tooling/configuration is implemented and tested. Existing commands below still operate the old Container/Mongo code. Docker builds, container sleep/wake and WSL sidecar repair are not acceptance gates for this target.
+
+## Historical Container and Atlas preparation
+
+**All sections below are historical/current-code reference, including their pending tasks and commands. They are not release instructions for Python Worker + D1.** Keep diagnostic/test evidence intact; superseded wording such as “active,” “next” or “required” below applies only to the old topology.
+
+## Historical path: deploy and verify on Cloudflare
 
 The user chose to defer local WSL/sidecar repair and proceed toward hosted deployment (October 21, 2026). **Passing local Wrangler-to-container acceptance is not a deployment prerequisite.** Keep its failed result recorded; perform the remaining integration acceptance on Cloudflare after production configuration is ready.
 

@@ -1,9 +1,9 @@
 # kanban
-Custom kanban board built using FastAPI + MongoDB and Astro + TypeScript. A [migration to Cloudflare D1](.agent/08-d1-migration.md) is now planned; executable code still uses MongoDB.
+Custom kanban board with Astro + TypeScript. The planned deployment is a **plain Python Cloudflare Worker + D1 on the existing $5/month Workers Paid plan**; [migration plan](.agent/08-d1-migration.md). Direct Python handlers replace FastAPI/Containers; browser TypeScript remains. Consider Free next month after measurement. Executable code currently still uses FastAPI + MongoDB.
 
-Backend setup, CRUD contracts, and tests: [backend/README.md](backend/README.md). Current code requires a MongoDB replica set; the proposed D1 migration retains FastAPI and uses a private Worker adapter. The frontend connects authentication, card/comment CRUD, and manual ordering through same-origin `/api`; see [frontend setup and checks](frontend/README.md). Local Mongo accounts and two live browser journeys are historically verified. D1 implementation, verification and production deployment remain pending in [next steps](.agent/next-steps.md).
+Current backend setup, CRUD contracts and tests: [backend/README.md](backend/README.md). The target uses a direct Python D1 binding, with no TypeScript SQL adapter. The frontend keeps authentication, card/comment CRUD and manual ordering through same-origin `/api`; see [frontend setup and checks](frontend/README.md). Local Mongo/browser results are historical. Python Worker/D1 implementation, verification and deployment remain pending in [next steps](.agent/next-steps.md). This update changes documentation only.
 
-Login throttling is implemented with configurable MongoDB limits and frontend retry guidance; see [the policy](backend/README.md#login-throttling). Origin/CSRF protection and authenticated Worker/container ingress are implemented; their hosted acceptance remains pending. The D1 migration must preserve these contracts and target no additional D1 charges within the existing Workers Paid allowance.
+Preserve the existing password/cookie sessions, revocation, [login limits](backend/README.md#login-throttling), exact Origin protection and API behavior. Prove Python runtime authentication compatibility first, then port handlers/persistence. Container-only ingress authentication retires with that boundary. Target the Paid plan's included allowances; keep secure authentication when evaluating Free.
 
 # sections:
 1. review/brainstorm: 

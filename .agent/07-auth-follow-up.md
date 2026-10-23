@@ -1,6 +1,8 @@
 # Authentication follow-up
 
-October 21 persistence update: [D1 migration](08-d1-migration.md#authentication-throttling-and-account-tools) is planned. Preserve every security contract here, replacing Mongo token storage/atomic allowance reservations/TTL cleanup with tested D1 equivalents. Keep Argon2id and JWT/ingress secrets; D1 planning does not authorize password resets, account creation or remote deployment.
+October 22 target: [plain Python Worker + D1](08-d1-migration.md#authentication-throttling-and-account-tools) on the existing $5/month Paid plan. Preserve Argon2id, JWT cookies/revocation, exact Origin checks and persistent throttling. Prove Argon2/package compatibility first; replace thread-based verification, FastAPI middleware, Mongo storage and TTL cleanup with supported Python Worker/D1 equivalents. Keep JWT_SECRET stable. Retire PROXY_SECRET with the removed container boundary; there is no separate backend ingress to authenticate. Free next month is optional and must not weaken hashing.
+
+The sections below record the current FastAPI/Mongo/Container implementation and historical checks. Container-only follow-ups are superseded; behavioral security requirements carry forward. This planning pass does not create accounts, reset passwords, deploy or change billing.
 
 Updated October 21, 2026. Login throttling and origin/CSRF protection are implemented; Cloudflare Worker/container ingress protection is prepared, while remote deployment and production acceptance remain pending. Existing JWT cookies, revocable token records, canonical username identity, and CRUD contracts are preserved.
 

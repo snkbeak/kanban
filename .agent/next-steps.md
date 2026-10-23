@@ -1,19 +1,25 @@
 # Next steps
 
-Updated October 21, 2026. This is the active checklist for work remaining after backend CRUD delivery. The confirmed decisions and implementation resolutions in [06-backend-crud.md](06-backend-crud.md) are authoritative. API examples and setup commands are in [backend/README.md](../backend/README.md).
+Updated October 22, 2026. The active target is **plain Python Worker + direct D1 binding**, Astro/browser TypeScript, and the already purchased **$5/month Workers Paid plan**. FastAPI/Containers and an internal TypeScript adapter are superseded. API behavior in [06-backend-crud.md](06-backend-crud.md) and security in [07-auth-follow-up.md](07-auth-follow-up.md) remain authoritative.
 
-Current priority (October 21, 2026): the user requested a **MongoDB to D1 migration plan** and updated Markdown planning files. Follow [08-d1-migration.md](08-d1-migration.md). Planning is complete; implementation and remote changes are not authorized by that request. Preserve the API/password security and target no additional D1 cost. Atlas network/gateway work is superseded. Local WSL/sidecar repair remains deferred and is not a publication prerequisite.
+Current request: rewrite docs/plans only. Follow [08-d1-migration.md](08-d1-migration.md) when implementation is requested. No code, remote resources or billing changes in this pass. Aim to deploy on Paid first; review Free next month after measuring real usage and authentication CPU. Docker/WSL sidecar repair is not a gate.
 
 ## Active D1 migration checklist
 
-- [x] Document proposed FastAPI/container -> private outbound handler -> D1 architecture, schema, transaction strategy, cost constraints, verification and release/recovery steps.
-- [ ] Prove D1 atomic guard rollback, consistent board reads, concurrent moves/comment limits and persistent throttle semantics with local D1 tooling.
-- [ ] Prepare an isolated hosted outbound-handler/D1 probe; obtain approval before remote creation, deployment or test writes. No public SQL endpoint or runtime account API token.
-- [ ] Implement migrations, typed SQL operations and Python repositories; port sessions, login limits, account tools and board persistence without changing public contracts.
-- [ ] Replace runtime Mongo configuration/dependencies, adapt local/CI fixtures and verify the internal D1 path, preserving Argon2id and both ingress/Origin checks.
-- [ ] Measure D1 rows/storage and full Cloudflare cost expectations; inspect shared allowance usage before release. Budget alerts are not hard caps.
-- [ ] Prepare exact D1 resource/migration/provisioning/deployment changes for approval; execute bounded hosted acceptance and restore verification only afterward.
-- [ ] Record actual results and cleanup, then commit the implemented migration. Current pass is documentation only.
+- [x] Rewrite docs/plans for plain Python handlers, direct D1, existing Paid plan and optional next-month Free review.
+- [ ] Prove Python runtime packages, Argon2 correct/wrong/dummy paths, JWT/cookies, D1 batch rollback and Astro asset packaging. Record CPU/memory and supported hash parameters.
+- [ ] Replace FastAPI HTTP plumbing with direct Worker handlers while preserving validation/errors, cookies, Origin checks and API behavior.
+- [ ] Implement numbered SQL migrations and Python D1 repositories; prove transactional rollback, consistent reads, concurrent moves/comment limits and atomic throttling.
+- [ ] Port sessions, account tools, board operations and scheduled expiry cleanup. Provisioning is insert-only; reset/revocation is explicit.
+- [ ] Configure one Python Worker with Astro assets/D1; update scripts, fixtures and CI. Retire obsolete Mongo/Container runtime dependencies and shared ingress secret, preserving deployed migration history.
+- [ ] Run actual Python Worker/D1 integration and browser acceptance, packaging/dry-run and isolated recovery. Measure requests/CPU/D1 usage against Paid allowances.
+- [ ] Follow [deployment](05-cloudflare-deployment.md) when execution is requested: verify remote state, migrate/provision/deploy and perform bounded hosted acceptance including Worker redeploy persistence.
+- [ ] Record actual results, identifiers and exact cleanup. Leave historical results labeled historical.
+- [ ] Optional next month: assess Free limits and retention using measured usage; keep Paid if needed for secure authentication. No billing change now.
+
+## Historical baseline and superseded checklist
+
+Everything below records the prior FastAPI/MongoDB/Container work and earlier pending tasks. Preserve its evidence; it is **not the active deployment checklist**. References below to retaining FastAPI, adapters, container sleep/replacement, Atlas provisioning or Docker/WSL gates are superseded by the checklist above.
 
 ## Completed baseline
 

@@ -1,6 +1,8 @@
 # Kanban frontend
 
-**Planned persistence change:** follow the [D1 migration plan](../.agent/08-d1-migration.md) before deployment. Existing Worker/config commands still describe the Mongo backend; no D1 binding or adapter has been implemented. Preserve Astro/UI/API behavior while replacing backend persistence. Atlas secret-upload instructions below are historical/current-code reference, not the active release sequence.
+**Planned deployment:** [plain Python Worker + D1](../.agent/08-d1-migration.md) with Astro Static Assets on the existing $5/month Workers Paid plan. Keep Astro/browser TypeScript and API/UI behavior. Direct Python handlers replace FastAPI/Containers; there is no TypeScript backend rewrite or SQL adapter. Consider Free next month after measurement. This documentation pass does not change code/configuration.
+
+**Current-code reference:** commands and test evidence below still describe the FastAPI/Mongo/Container implementation. No Python Worker or D1 binding is implemented yet. Atlas secret uploads and Container deployment commands are not the active release sequence; follow [the deployment plan](../.agent/05-cloudflare-deployment.md).
 
 Astro frontend configured for Cloudflare Workers Static Assets at
 `https://kanban.sneakybeak.net`, deployed with Wrangler. The Worker name is
@@ -288,6 +290,8 @@ these files. Keep local secrets in ignored `.dev.vars` files; never put them in
 
 
 ## Container deployment preparation
+
+Historical/current-code reference only. The active Python Worker/D1 target does not use these Container build, ingress, sleep or sidecar steps.
 
 The Worker routes only `/api` and `/api/*` to one named FastAPI container. Static
 assets remain separate; the API uses an exact public-origin check, a 20-second

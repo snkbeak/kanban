@@ -1,6 +1,6 @@
 # Remaining backend CRUD API plan
 
-October 21 update: the public API and concurrency resolutions here remain authoritative during the [planned D1 migration](08-d1-migration.md). MongoDB-specific storage/transaction implementation details are to be replaced, not API semantics. D1 implementation and verification are pending.
+October 22 update: the public API and concurrency resolutions here remain authoritative for [plain Python Worker + D1](08-d1-migration.md) on the existing $5/month Paid plan. Replace FastAPI HTTP plumbing and MongoDB persistence with direct Python handlers and D1 repositories; preserve API semantics. The implementation/tests below describe the historical FastAPI/Mongo baseline, not completed Worker/D1 work. Free next month is optional after measurement.
 
 Status: backend implementation and verification completed October 20, 2026: 78 contract tests and 13 real Atlas integration tests passed, along with lint/format checks. Only generated test databases were created/dropped; no application database was reset. The user initially deferred local MongoDB setup, then supplied working Atlas credentials locally.
 

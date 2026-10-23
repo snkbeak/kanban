@@ -1,14 +1,14 @@
 # Implementation plans
 
-Source: [project rough draft](../README.md). Backend CRUD/authentication and frontend API integration are implemented against MongoDB. Isolated browser fixtures and two real multi-session browser journeys against local `kanban_dev` pass; the three local accounts were deliberately provisioned with user authorization. Production is not deployed. The user has requested a D1 migration plan; intended hosted usernames are `sea`, `poopfart`, `sneaky`.
+Updated October 22, 2026. **Active target: plain Python Cloudflare Worker + D1, with Astro/browser TypeScript and the existing $5/month Workers Paid plan.** No FastAPI, ASGI/Uvicorn, Containers or TypeScript API rewrite in the target runtime. Consider Free next month only after measurement. This update is documentation only; executable code remains FastAPI/MongoDB and production deployment is not verified.
 
-Start here: [Next steps](next-steps.md) records the completed baseline and the remaining setup, frontend integration, collaboration, deployment, and release checks. Frontend, delivery, and deployment plans were reconciled with the implemented backend on October 20, 2026.
+Start here: [Next steps](next-steps.md) is the active execution checklist. [Python Workers + D1 migration](08-d1-migration.md) defines architecture, compatibility proof, schema, atomicity, auth, cost and acceptance. [Deployment](05-cloudflare-deployment.md) defines the release sequence. These supersede earlier Container/adapter and Atlas plans.
 
 Current backend contract: [Backend CRUD plan and implementation resolutions](06-backend-crud.md). Username identity and CRUD are implemented; 78 contract tests and 13 real Atlas integration tests pass. Its decisions supersede conflicting assumptions in earlier plans. Setup and payload examples are in [backend/README.md](../backend/README.md).
 
-Active direction (October 21, 2026): follow the [MongoDB to D1 migration plan](08-d1-migration.md) before deployment. Proposed topology retains FastAPI/Argon2id in Cloudflare Containers and reaches D1 through a private Worker outbound adapter. Prove that path and transactional API behavior before replacing persistence. Target no additional D1 usage charges within the existing paid-plan allowances; there is no verified hard spending cap. Atlas access/gateway work is superseded. Local WSL/sidecar repair remains deferred, not a deployment gate; historical Windows builds/dry-runs do not establish D1 acceptance.
+First future implementation milestone: prove Python runtime packages, Argon2/JWT/cookies, direct D1 queries/batch rollback and Astro assets in one Worker deployment. Then port the HTTP boundary and persistence, retaining Python business rules and the API/security contracts. Do not weaken password hashing for Free. No Docker build or WSL Container-sidecar repair is required by the target.
 
-Separate follow-up: [Authentication follow-up](07-auth-follow-up.md) records implemented MongoDB login throttling, strict Origin/CSRF protection and frontend recovery handling (October 21). The Cloudflare Container/Worker and shared-secret ingress check are prepared; remote deployment and production acceptance remain pending.
+[Authentication follow-up](07-auth-follow-up.md) records the security contract and historical Mongo/Container evidence. Preserve revocable cookie sessions, persistent login limits, exact Origin checks and frontend recovery. Container-only shared-secret ingress is retired with that boundary.
 
 Supporting plans:
 
@@ -16,9 +16,9 @@ Supporting plans:
 2. [Backend and data](02-backend.md): current FastAPI/MongoDB baseline, accounts, API contracts and D1 migration direction.
 3. [Frontend](03-frontend.md): Astro, TypeScript, and board interactions.
 4. [Delivery and verification](04-delivery.md): implementation milestones, checks, and operation.
-5. [Deployment](05-cloudflare-deployment.md): D1 deployment direction plus historical Worker/Container/Atlas preparation and verification.
-6. [D1 migration](08-d1-migration.md): active architecture, schema, atomicity, security, cost, implementation milestones, acceptance and recovery plan.
+5. [Deployment](05-cloudflare-deployment.md): Python Worker/D1 release sequence plus clearly separated historical Container/Atlas evidence.
+6. [Python Workers + D1 migration](08-d1-migration.md): active architecture, schema, atomicity, security, cost, milestones, acceptance and recovery.
 
-The proposed target is one shared board, Cloudflare Workers Static Assets/API Worker, FastAPI on Cloudflare Containers (Workers Paid), and D1. Current code still uses MongoDB; the migration is not implemented. The user enabled Workers Paid and has Docker Desktop. Deployment remains pending; the existing password/session system is retained. Use periodic refreshes; no queue, Redis, or WebSockets are required for this migration.
+Keep one shared board and periodic refreshes. Intended production usernames are `sea`, `poopfart`, `sneaky`; preserve local Mongo accounts/data and do not import fixtures. Earlier passing backend/browser/Container checks remain historical, not Python Worker/D1 acceptance. No implementation, resource/account creation, secrets, deployment or billing change occurred in this documentation pass.
 
 Cloudflare/Wrangler frontend deployment, the yellow label “At risk,” and author-only comment modification are confirmed requirements. Decisions marked as assumptions can be revisited during implementation. They are proposed defaults, not additional requirements from the rough draft.

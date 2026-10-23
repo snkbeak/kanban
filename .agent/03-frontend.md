@@ -1,6 +1,6 @@
 # Frontend integration plan
 
-October 21 update: the [D1 migration](08-d1-migration.md) targets the existing FastAPI/browser contract. No frontend redesign or automatic retry behavior is proposed. Re-run applicable API/conflict/recovery journeys against the migrated backend; Mongo-era fixtures alone do not prove D1 persistence.
+October 22 update: [plain Python Worker + D1](08-d1-migration.md) replaces FastAPI/Containers while retaining Astro and browser TypeScript. The same Worker deployment serves assets and same-origin `/api`. Use the existing $5/month Paid plan; Free next month is optional after measurement. No frontend redesign or automatic retries. Re-run API/conflict/recovery journeys against the real Python Worker/D1 backend; Mongo-era fixtures alone do not prove acceptance.
 
 Updated October 20, 2026 to match the implemented backend. [06-backend-crud.md](06-backend-crud.md) and [backend/README.md](../backend/README.md) supersede older frontend assumptions. Track execution in [next-steps.md](next-steps.md).
 
@@ -10,9 +10,9 @@ Implemented October 20, 2026 using Astro page shells and browser TypeScript, pre
 
 Follow-up verification: two real browser journeys pass against local FastAPI and the `kanban_dev` replica set, including multi-session conflicts, retained drafts, uncertain-response recovery, comment ownership/cap, guarded deletion, and reload/order persistence. No application behavior or design changes were needed. This local verification does not establish Atlas/production acceptance.
 
-Use a typed API client and separate state for fetched records, ordering, and unsaved drafts. Derive or validate types against FastAPI OpenAPI. A global state framework is not required for three users.
+Use a typed API client and separate state for fetched records, ordering, and unsaved drafts. Preserve the existing TypeScript contract against backend schemas and response fixtures; the target has no FastAPI-generated OpenAPI dependency. A global state framework is not required for three users.
 
-Keep same-origin `/api` routing in development and production; add the development proxy during integration and the Cloudflare Worker proxy through [05-cloudflare-deployment.md](05-cloudflare-deployment.md). MongoDB credentials stay exclusively on the backend.
+Keep same-origin `/api` in development and production. Update development routing to the local Python Worker and serve production API routes directly in that Worker through [05-cloudflare-deployment.md](05-cloudflare-deployment.md). D1 bindings and signing secrets remain server-side; no browser database credentials.
 
 ## Authentication and identity
 
@@ -22,7 +22,7 @@ Public account records contain only `username`. Card `creator` and `assignees`, 
 
 Show a generic failed-login message, disable duplicate submissions, and display the current username and logout control. On session expiry, stop polling, return to login, and preserve drafts in memory where practical.
 
-Login throttling and origin/CSRF protection are separate work in [07-auth-follow-up.md](07-auth-follow-up.md). The current login/me responses do not contain CSRF tokens. Integrate the eventual mechanism only after that contract is defined.
+Login throttling and exact-Origin CSRF protection are implemented in the current backend; preserve their contract from [07-auth-follow-up.md](07-auth-follow-up.md) in the Python Worker. Login/me responses do not contain CSRF tokens. Preserve retry guidance and rejected-logout/draft recovery.
 
 ## Board data and presentation
 

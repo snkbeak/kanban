@@ -1,6 +1,8 @@
 # Kanban API
 
-**Planned migration:** [MongoDB to Cloudflare D1](../.agent/08-d1-migration.md), retaining FastAPI and existing authentication/API behavior. The code and setup commands below still use MongoDB. Do not execute the Atlas release/provisioning instructions as the new deployment path; D1 implementation and its operator tools are pending. The plan describes the private adapter, SQL transactions, cost constraints and acceptance checks.
+**Planned target:** [plain Python Worker + D1](../.agent/08-d1-migration.md) on the existing $5/month Workers Paid plan. Direct Python handlers replace FastAPI/ASGI/Uvicorn and Containers; Python repositories use the D1 binding directly. Keep reusable Python validation/business logic and existing auth/API behavior. First prove runtime packages, Argon2/JWT/cookies and D1. Free next month is optional after measurement. This is documentation only; implementation is pending.
+
+**Current-code reference:** the commands and test evidence below still describe FastAPI/MongoDB. They are not the new release instructions. Use [the deployment plan](../.agent/05-cloudflare-deployment.md) for the active direction; replacement CLI commands will be documented after implementation/testing.
 
 FastAPI and PyMongo Async implement a shared board with cookie authentication, card and comment CRUD, manual ordering, and read-only accounts. Run commands from `backend/`.
 
@@ -295,7 +297,7 @@ Login throttling, strict Origin/CSRF protection, and frontend recovery messaging
 
 ## Cloudflare Container hosting
 
-The selected host is Cloudflare Containers on Workers Paid; MongoDB remains Atlas.
+This section describes the superseded Container/Atlas preparation and current executable code. The selected target is now a plain Python Worker with D1 on Workers Paid; these Container commands are not its release path.
 The existing login, cookie, session, throttling and CRUD contracts are retained.
 See the [deployment guide](../.agent/05-cloudflare-deployment.md) for secrets, Atlas
 network access, cost behavior, local checks, rollout and remaining release gates.
