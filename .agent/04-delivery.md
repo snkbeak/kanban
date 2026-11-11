@@ -1,82 +1,47 @@
 # Delivery and verification plan
 
-## Milestone 1: runnable foundation
+October 22 update: follow the [Python Worker + D1 milestones](08-d1-migration.md#ordered-implementation-milestones) and [next steps](next-steps.md). Use direct Python handlers, Astro Static Assets and the existing $5/month Paid plan. First prove Python packages/Argon2/JWT/D1; then port HTTP and persistence, verify, and deploy when requested. No FastAPI/Containers or TypeScript adapter in the target. Free next month is optional after measurement. This pass is documentation only.
 
-- Create `backend/`, `frontend/`, and `infra/` with minimal project configuration and committed dependency lockfiles.
-- Add a local Compose setup for MongoDB, a persistent data volume, and an example environment file containing placeholders only.
-- Configure FastAPI startup/shutdown, validated settings, indexes, readiness checks, and the Astro shell/development API proxy.
-- Add the Cloudflare Worker proxy and Wrangler configuration for Astro static assets. Verify local routing through Wrangler before production deployment.
-- Extend `.gitignore` for Node/Astro output, local environment overrides, database dumps, and generated test artifacts. Keep example configuration and lockfiles tracked.
-- Document setup/run commands for PowerShell as well as environment variables and required runtimes.
+Updated October 20, 2026. Use [next-steps.md](next-steps.md) as the active execution checklist. [06-backend-crud.md](06-backend-crud.md) and [backend/README.md](../backend/README.md) define the implemented backend; this roadmap no longer assumes backend pagination, shared card/comment versions, optional ordering, or automatic account seeding.
 
-Acceptance: a fresh checkout can start the frontend, API, and database using documented commands; readiness fails clearly when the database is unavailable.
+## Completed backend milestone
 
-## Milestone 2: fixed accounts and login
+Username-only accounts, cookie/JWT authentication, read-only users, card/comment CRUD, transactional ordering, independent versions, validation, and health endpoints are implemented. Recorded verification: 78 contract tests, 13 real Atlas integration tests, and Ruff lint/format checks passed.
 
-- Implement idempotent account seeding, bundled avatar placeholders, password hashing, session storage, authentication dependencies, and the user-list API.
-- Add login/logout UI, origin and CSRF protection, bounded login throttling, and the password-rotation operator command.
-- Verify session expiry explicitly rather than relying on MongoDB's cleanup timing.
+The Atlas tests created and removed only generated test databases. Application accounts, application database setup, public browser integration, and deployment recovery were not verified by those tests.
 
-Acceptance: each of the three accounts can sign in and out; unauthenticated requests cannot read or mutate board data; no account-management UI or API exists.
+## Remaining milestones
 
-## Milestone 3: persistent shared board
+| Milestone | Work | Acceptance |
+| --- | --- | --- |
+| Runtime proof | Plain Python handler, supported packages, Argon2/JWT/cookies, D1 query/batch and assets | Works in actual Python Workers runtime with measured CPU/memory |
+| Backend migration | Direct handlers, D1 schema/repositories, auth/limits, CRUD and operator tools | Existing API/security/revision semantics pass real Worker/D1 tests |
+| Frontend/collaboration | Retain Astro/TypeScript, polling and drafts; adapt runtime fixtures | Multi-session conflict/recovery and reload journeys pass against Worker/D1 |
+| Deployment | One Python Worker with assets/D1, secrets, migrations and deliberate account provisioning | Public hostname works and data/sessions survive Worker redeploy |
+| Release/operations | CI, usability, bounded acceptance, isolated recovery, runbook and usage measurement | Hosted behavior/recovery demonstrated on Paid; Free reviewed separately next month |
 
-- Implement card schemas, ticket counter, summary/detail queries, versioned mutations, and validation.
-- Build columns, card summaries, create/edit/details forms, assignee/tag controls, movement, and deletion confirmation.
-- Add per-column pagination and the specified search/filters.
+Details belong in [03-frontend.md](03-frontend.md), [05-cloudflare-deployment.md](05-cloudflare-deployment.md), and the active checklist. Login throttling and origin/CSRF remain separate in [07-auth-follow-up.md](07-auth-follow-up.md), including their later browser/proxy integration.
 
-Acceptance: two signed-in browsers see persistent changes; concurrent creates receive unique ticket numbers; a stale edit or delete returns a visible conflict instead of losing newer data. Cards survive service/database restarts with the persistent volume intact.
+## Verification matrix
 
-## Milestone 4: comments and collaboration behavior
-
-- Implement embedded comment creation/edit/deletion, author-only edit/delete authorization, and the atomic comment-count cap.
-- Add comments UI, periodic refresh, window-focus refresh, unsaved-draft protection, and expired-session handling.
-- Complete keyboard, mobile, loading, empty, and network-error states.
-- Add drag-and-drop only if the required flows are already complete.
-
-Acceptance: Chris, Sean, and James can manage the same ticket and add to its discussion in separate sessions, but cannot edit or individually delete another person's comments. Polling reveals changes without destroying a draft, and a conflicting comment operation is recoverable.
-
-## Milestone 5: deploy and hand off
-
-- Follow the [Cloudflare deployment plan](05-cloudflare-deployment.md): deploy Astro assets and the API proxy with Wrangler, provision one FastAPI service on the recommended Render host, and connect it to MongoDB Atlas.
-- Route `/api` to FastAPI over HTTPS while preserving the frontend origin, cookies, CSRF header, and response status. Keep API responses out of caches.
-- Configure an Atlas database user and allowlist the backend's outbound IP ranges. Store the MongoDB URI and account credentials only in backend secrets; keep the Worker-to-backend proxy secret in both providers' secret stores.
-- Configure production cookies, allowed origin, authenticated proxy forwarding, health checks, and isolated preview/development settings.
-- Add structured request/error logs without credentials or card/comment bodies. Cloudflare and backend service logs plus health checks are enough initially.
-- Configure backups for the selected Atlas tier and document its actual restore guarantees. Target daily backups with seven daily and four weekly retention; if that policy is unavailable, use an encrypted scheduled logical backup stored separately. Quiesce application writes during logical dumps so counters and cards remain consistent.
-- Restore a backup into an isolated database and verify users, cards, comments, and subsequent ticket allocation. Restarting from a backup may lose changes since that backup; communicate the daily recovery window.
-- Document deployment, restart, password rotation, backup/restore, and rollback. Before schema changes, back up data and confirm the previous release remains compatible or document the required restore.
-
-Acceptance: all three users can access the Cloudflare URL, log in with their assigned credentials, complete the core workflow, and return after a backend redeployment without losing stored work in Atlas. Deployment requires backend/database provider selection, the frontend hostname, and secrets to be supplied.
-
-## Verification strategy
-
-Use backend integration tests against a disposable real MongoDB database for behavior that depends on atomic updates or indexes. Never point tests at the deployed database. Keep UI end-to-end tests focused on user journeys rather than testing every component in isolation.
-
-| Area | Required checks |
+| Area | Contract to preserve and remaining checks |
 | --- | --- |
-| Accounts | Seeding twice preserves identities/passwords; unknown users fail; account data cannot be edited through API payloads |
-| Authentication | Correct/incorrect passwords, protected routes, login throttling, logout revocation, expiry even before TTL cleanup, CSRF/origin rejection |
-| Cards | Defaults, editable fields, validation limits, invalid assignees/enums, read-only field rejection, persistence and deletion |
-| Ticket allocation | Concurrent creates get distinct increasing numbers; deletions and failures do not recycle numbers |
-| Concurrency | Two writes with the same version yield one success and one conflict; cover edits, moves, deletion, and comment mutations |
-| Comments | Author can edit/delete own comment; another user gets `403` with no data/version change; spoofed authors and nested comment replacement are rejected; immutable author/creation time, updated parent version, card deletion removes comments, concurrent requests cannot exceed the cap |
-| Queries | Filter combinations, literal search characters, ticket search, pagination without duplicate records on unchanged data, accurate filtered counts |
-| Browser workflows | Login, create, assign, tag, move, comment, edit, delete, logout; repeat with multiple authenticated browser contexts and check that other authors' comment controls are absent |
-| Recovery | Failed reads/writes, uncertain write outcome, stale versions, deleted open card, expired session, drafts preserved during polling |
-| Usability | Keyboard flow, focus management, readable status labels, mobile scrolling, long text, empty states |
-| Operations | Fresh setup, Wrangler preview/build, production proxy login/logout and cookie forwarding, no API caching, direct-origin rejection, redeploy persistence, isolated backup restore, no secrets in generated client assets |
+| Accounts | Username primary key and public username only; insert-only provisioning rejects duplicates; reset explicitly replaces hash and revokes sessions; no signup/profile API |
+| Authentication | Real Python runtime hashing/JWT/cookies, login/me/logout, revoked/expired sessions, atomic throttling and Origin rejection before side effects |
+| Cards | Required single tag, defaults, confirmed lengths, enums, canonical assignees, immutable server fields |
+| Ordering | Creates/selector moves append; drag-and-drop supplies anchors; source/destination revisions prevent stale arrangement writes; order survives reloads/redeploys |
+| Health | Enter/create in Blocked sets blocked health; lock while there; preserve it when leaving; allow manual health edits outside |
+| Concurrency | Content saves use card version, comments use individual versions, discussion advances separately; deletion checks both card/discussion revisions |
+| Comments | Author-only individual edits/deletes, 20-comment cap, independent content saves, whole-card removal includes all discussion |
+| Queries | Full board is fetched once per refresh; frontend search/filter/count/display-pagination preserves the complete dataset |
+| Browser recovery | Drafts survive polls/errors; late responses do not regress content/discussion/order or resurrect deleted cards; uncertain writes are not automatically replayed |
+| Usability | Mobile/keyboard/focus behavior, long text, empty states, clear health text/colors, assignment controls |
+| Operations | Direct Worker status/cookie/error behavior, no API caching, host/Origin checks, D1 schema readiness, redeploy persistence and isolated restore |
 
-Automate Python formatting/linting and backend tests, TypeScript/Astro checks, frontend production build, and the core browser journey in CI. Run concurrent-writer and backup-restore checks before the first deployment. Three simultaneous sessions are the relevant collaboration target; distributed load testing is unnecessary at this stage.
+## Automation and handoff
 
-## Completion checklist
+Adapt existing backend assertions to plain Python handlers and real D1 fixtures; run lint/format, Worker runtime integration, packaging/dry-run, TypeScript/Astro checks/build and focused multi-user browser journeys. Use disposable test databases. Generic SQLite or CPython checks alone do not establish Worker/D1 compatibility. Do not require Docker/WSL sidecar repair or rerun Mongo suites as evidence of D1 acceptance.
 
-- [ ] Every field and column in the original rough draft is represented.
-- [ ] The three fixed accounts and pictures work, with secrets outside source control.
-- [ ] Card and comment CRUD persists and reports conflicts clearly.
-- [ ] Search, filters, periodic refresh, and keyboard/mobile interactions work.
-- [ ] Automated checks pass and the three-session workflow has been exercised.
-- [ ] Deployment and backup restoration have been verified and documented.
-- [ ] The project README explains how to run and operate the finished application.
+The backend lockfile is committed; update it deliberately for supported Python Worker dependencies. Document secrets, local startup, migration/provisioning, deployment, password/secret rotation, recovery and rollback. Retire obsolete FastAPI/TestClient/Container tooling after replacement verification; preserve historical results as historical.
 
-These checkboxes describe future implementation work; creating these planning documents does not mark them complete.
+Only mark the release complete after public browser workflows and backup restoration have passed; backend test success alone does not establish those outcomes.

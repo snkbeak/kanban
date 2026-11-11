@@ -1,0 +1,61 @@
+---
+import LoginLayout from '../layouts/LoginLayout.astro';
+---
+<LoginLayout title="Login" description="Login to kanban.sneakybeak.net">
+    <section class="login-card" aria-labelledby="login-title">
+        <h1 id="login-title">Log in</h1>
+        <form class="login-form" method="post" action="/api/auth/login">
+            <div class="login-field">
+                <label for="username">Username</label>
+                <input
+                    id="username"
+                    name="username"
+                    type="text"
+                    autocomplete="username"
+                    autocapitalize="none"
+                    spellcheck="false"
+                    required
+                />
+            </div>
+            <div class="login-field">
+                <label for="password">Password</label>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                />
+            </div>
+            <p id="login-status" role="status"></p>
+            <button type="submit">Log in</button>
+        </form>
+    </section>
+</LoginLayout>
+
+<script>
+    import { api, loginErrorMessage } from '../lib/api';
+    const form = document.querySelector<HTMLFormElement>('.login-form')!;
+    const status = document.querySelector<HTMLElement>('#login-status')!;
+    const submit = form.querySelector<HTMLButtonElement>('button')!;
+    let submitting = false;
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (submitting) return;
+        submitting = true;
+        submit.disabled = true;
+        status.textContent = 'Logging in…';
+        const data = new FormData(form);
+        try {
+            await api.login(String(data.get('username')), String(data.get('password')));
+            location.replace('/');
+        } catch (error) {
+            status.textContent = loginErrorMessage(error);
+        } finally {
+            form.querySelector<HTMLInputElement>('[name="password"]')!.value = '';
+            submitting = false;
+            submit.disabled = false;
+        }
+    });
+    void api.me().then(() => { if (!submitting) location.replace('/'); }).catch(() => {});
+</script>

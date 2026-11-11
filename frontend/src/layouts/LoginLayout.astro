@@ -1,0 +1,28 @@
+---
+import Favicons from '../components/Favicons.astro';
+import '../styles/global.css';
+import '../styles/login.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="description" content={description} />
+        <Favicons />
+        <title>{title} | kanban.sneakybeak.net</title>
+    </head>
+    <body>
+        <main id="main" class="login-page">
+            <slot />
+        </main>
+    </body>
+</html>

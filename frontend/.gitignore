@@ -1,0 +1,37 @@
+# build output
+dist/
+# generated types
+.astro/
+
+# local Cloudflare state and secrets
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# dependencies
+node_modules/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+
+# environment variables
+.env
+.env.production
+.env.live
+
+# macOS-specific files
+.DS_Store
+
+# jetbrains setting folder
+.idea/
+
+# The root Python ignore includes lib/; browser source is intentional.
+!src/lib/
+!src/lib/**
+test-results/
+playwright-report/

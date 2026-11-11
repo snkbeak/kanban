@@ -1,0 +1,93 @@
+﻿---
+import KanbanLayout from '../layouts/KanbanLayout.astro';
+import { columns } from '../lib/api';
+---
+<KanbanLayout title="Board">
+    <Fragment slot="navbar">
+        <p id="board-results" aria-live="polite">Loading board…</p>
+        <form class="board-toolbar" role="search">
+            <div class="board-filters">
+                <label class="search-field">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg>
+                    <input id="ticket-search" type="search" aria-label="Search tickets" placeholder="Search tickets…" />
+                </label>
+                <select id="assignee-filter" aria-label="Filter by assignee"><option value="">All assignees</option><option value="__unassigned">Unassigned</option></select>
+                <select id="tag-filter" aria-label="Filter by tag"><option value="">All tags</option></select>
+                <select id="health-filter" aria-label="Filter by health"><option value="">All health</option><option value="healthy">Healthy</option><option value="at_risk">At risk</option><option value="blocked">Blocked</option></select>
+                <select id="difficulty-filter" aria-label="Filter by difficulty"><option value="">All difficulty</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
+                <button class="clear-filters" type="reset" hidden>Clear filters</button>
+            </div>
+        </form>
+    </Fragment>
+    <div class="board-actions">
+        <button id="new-card" disabled>New ticket</button>
+        <button id="refresh-board">Refresh</button>
+        <p id="board-status" role="status">Connecting…</p>
+        <span id="current-user"></span>
+        <button id="logout" disabled>Log out</button>
+    </div>
+    <p id="ordering-note" class="ticket-credit" hidden>Clear filters to drag and reorder tickets. Column selectors remain available.</p>
+    <div class="kanban-scroll">
+        <div class="kanban-board" aria-label="Kanban board" aria-busy="true">
+            {columns.map((column) => (
+                <section class="kanban-column" data-column={column.id} aria-labelledby={`heading-${column.id}`}>
+                    <header class="column-header"><div class="column-title"><span class="column-dot" aria-hidden="true"></span><h2 id={`heading-${column.id}`}>{column.title}</h2><span class="column-count">0</span></div></header>
+                    <div class="column-cards"><p class="column-empty">Loading…</p></div>
+                </section>
+            ))}
+        </div>
+    </div>
+    <dialog id="card-dialog" aria-labelledby="editor-heading">
+        <header class="dialog-header"><h2 id="editor-heading">Ticket</h2><button id="refresh-editor" type="button">Refresh ticket</button><button id="close-editor" aria-label="Close ticket">Close</button></header>
+        <p id="editor-credit" class="ticket-credit"></p>
+        <p id="editor-status" role="status"></p>
+        <section id="content-conflict" hidden>
+            <p>This ticket changed. Your draft is preserved. Review the latest saved content below before choosing.</p>
+            <pre id="latest-content"></pre>
+            <button id="load-latest" type="button">Load latest (discard content draft)</button>
+            <button id="reapply-content" type="button">Keep my changes against latest</button>
+        </section>
+        <form id="card-form">
+            <fieldset id="content-fields">
+                <label>Title <input name="title" required maxlength="200" /></label>
+                <label>Description <textarea name="description" maxlength="20000" rows="5"></textarea></label>
+                <div class="form-grid">
+                    <label>Tag <input name="tag" required maxlength="32" /></label>
+                    <label>Difficulty <select name="difficulty"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select></label>
+                    <label>Health <select name="health"><option value="healthy">Healthy</option><option value="at_risk">At risk</option><option value="blocked">Blocked</option></select></label>
+                    <label id="create-column-label">Column <select name="column">{columns.map(column => <option value={column.id}>{column.title}</option>)}</select></label>
+                </div>
+                <fieldset class="assignee-options"><legend>Assignees (up to three)</legend><div id="editor-assignees"></div></fieldset>
+                <button id="save-content" type="submit">Save ticket</button>
+            </fieldset>
+        </form>
+        <div id="existing-card-actions" class="editor-actions" hidden>
+            <label>Move to <select id="editor-column">{columns.map(column => <option value={column.id}>{column.title}</option>)}</select></label>
+            <button id="delete-card" class="danger" type="button">Delete ticket</button>
+        </div>
+        <section id="discussion" hidden>
+            <h3 id="discussion-heading">Comments</h3>
+            <div id="comments"></div>
+            <form id="comment-form">
+                <label>Add a comment <textarea name="text" required maxlength="4000" rows="3"></textarea></label>
+                <p id="comment-length" class="ticket-credit">0 / 4000</p>
+                <p id="comment-cap" class="ticket-credit" hidden>20 comments reached. You can still edit or delete your own comments.</p>
+                <button id="add-comment" type="submit">Add comment</button>
+            </form>
+        </section>
+    </dialog>
+    <dialog id="session-dialog" aria-labelledby="session-heading">
+        <h2 id="session-heading">Log in again</h2>
+        <p>Your session ended. Drafts stay in this tab while you log back into the same account.</p>
+        <form id="session-form">
+            <label>Username <input name="username" autocomplete="username" autocapitalize="none" required /></label>
+            <label>Password <input name="password" type="password" autocomplete="current-password" required /></label>
+            <p id="session-status" role="status"></p>
+            <button type="submit">Log in</button>
+        </form>
+    </dialog>
+    <noscript>JavaScript is required to log in and use the shared board.</noscript>
+</KanbanLayout>
+<script>
+    import '../scripts/board';
+</script>
